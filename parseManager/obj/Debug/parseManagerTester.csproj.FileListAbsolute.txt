@@ -1,0 +1,6 @@
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.csprojResolveAssemblyReference.cache
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\parseManagerTester.exe.config
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\parseManagerTester.exe
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\parseManagerTester.pdb
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.exe
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.pdb
