@@ -13,7 +13,7 @@ public class define
 {
     public void testM(string arg1)
     {
-    	Console.WriteLine(arg1 + " it works!");
+    	Console.WriteLine(arg1);
     }
     public void testM2(string arg1)
     {
@@ -27,8 +27,8 @@ namespace parseManager
 		public static void Main(string[] args)
 		{
 			Console.WriteLine("Hello World!");
-			parseManager test = new parseManager("path","define");
-			test.invokeA("testM",new object[]{""});
+			parseManager test = new parseManager("parsetest2.txt","define");
+			test.invokeA("testM",new object[]{"This is invoked!"});
 			Console.Write("Press any key to continue . . . ");
 			Console.ReadKey(true);
 		}

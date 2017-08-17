@@ -18,57 +18,57 @@ namespace parseManager
 	/// </summary>
 	public class parseManager
 	{
-		string filepath;
-		bool hasDefine;
-		string define;
-		string entry="START";
-		Type defineType;
-		MethodInfo defineMethod;
-		object defineClassObject;
-		Dictionary<string, string> chunks = new Dictionary<string, string>();
+		string _filepath;
+		bool _hasDefine;
+		string _define;
+		string _entry="START";
+		Type _defineType;
+		MethodInfo _defineMethod;
+		object _defineClassObject;
+		Dictionary<string, string> _chunks = new Dictionary<string, string>();
 		private void parse(){
 			try
 		    {
-			    StreamReader sr = File.OpenText (filepath);
+			    StreamReader sr = File.OpenText (_filepath);
 				string CDFDATA = sr.ReadToEnd ();
 				string pattern = @"\[(.+)\][\r\n]*?\{([^\0]+?)\}";
 				var match = Regex.Matches( CDFDATA, pattern );
 				foreach (Match m in match)
-					chunks.Add (m.Groups [1].ToString (), m.Groups [2].ToString ());
+					_chunks.Add (m.Groups [1].ToString (), m.Groups [2].ToString ());
 		    }
 		    catch (FileNotFoundException ex)
 		    {
-		    	Console.WriteLine("File '"+filepath+"' does not exist!\n"+ex);
+		    	Console.WriteLine("File '"+_filepath+"' does not exist!\n"+ex);
 		    }
 			
 		}
 		public parseManager(string filepath)
 		{
-			this.filepath=filepath;
-			hasDefine=false;
+			_filepath=filepath;
+			_hasDefine=false;
 			parse();
 		}
 		public parseManager(string filepath,string define){
-			this.define=define;
-			hasDefine=true;
-			this.filepath=filepath;
-			defineType = Type.GetType(define);
-			ConstructorInfo defineConstructor = defineType.GetConstructor(Type.EmptyTypes);
-			defineClassObject = defineConstructor.Invoke(new object[]{});
+			_define=define;
+			_hasDefine=true;
+			_filepath=filepath;
+			_defineType = Type.GetType(define);
+			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
+			_defineClassObject = defineConstructor.Invoke(new object[]{});
 			parse();
 		}	
 		public int invokeA(string method, object[] args){ // TODO collect the returned arguments if any
-			if (!hasDefine)
+			if (!_hasDefine)
 				return -1;
-			defineMethod = defineType.GetMethod(method);
-			defineMethod.Invoke(defineClassObject, args);
+			_defineMethod = _defineType.GetMethod(method);
+			_defineMethod.Invoke(_defineClassObject, args);
 			return 0;
 		}
 		public int invokeNA(string method, object[] args){ // Simple Invoking!
-			if (!hasDefine)
+			if (!_hasDefine)
 				return -1;
-			defineMethod = defineType.GetMethod(method);
-			defineMethod.Invoke(defineClassObject, args);
+			_defineMethod = _defineType.GetMethod(method);
+			_defineMethod.Invoke(_defineClassObject, args);
 			return 0;
 		}
 		public nextType next(){
