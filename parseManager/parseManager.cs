@@ -26,9 +26,18 @@ namespace parseManager
 		MethodInfo _defineMethod;
 		object _defineClassObject;
 		chunk _currentChunk;
+		chunk _lastChunk=null;
+		readonly ENV _mainENV = new ENV();
+		ENV _defualtENV = _mainENV;
 		Dictionary<string, bool> _flags = new Dictionary<string, bool>();
 		Dictionary<string, chunk> _chunks = new Dictionary<string, chunk>();
 		Dictionary<string, string> _methods = new Dictionary<string, string>();
+		void InitFlags(){
+			_flags.Add("leaking",false);
+			_flags.Add("forseelabels",true);
+			_flags.Add("debugging",false);
+			_flags.Add("topdown",true);
+		}
 		void _Parse(string data)
 		{
 			string pattern = @"\[(.+)\][\r\n]*?\{([^\0]+?)\}";
@@ -48,9 +57,14 @@ namespace parseManager
 				int loc = Blck.IndexOf(":");
 				if (loc != -1) {
 					_chunks[Blck.Substring(0, loc)] = new chunk(Blck.Substring(0, loc), Cont, Blck.Substring(loc + 1));
+					Blck=Blck.Substring(0, loc);
 				} else {
 					_chunks[Blck] = new chunk(Blck, Cont);
 				}
+				if(_lastChunk!=null){
+					_lastChunk.SetNextChunk(_chunks[Blck]);
+				}
+				_lastChunk=_chunks[Blck];
 			}
 		}
 		void Parse()
@@ -77,12 +91,14 @@ namespace parseManager
 		}
 		public parseManager(string filepath)
 		{
+			InitFlags();
 			_filepath = filepath;
 			_hasDefine = false;
 			Parse();
 		}
 		public parseManager(string filepath, string define)
 		{
+			InitFlags();
 			_define = define;
 			_hasDefine = true;
 			_filepath = filepath;
@@ -91,16 +107,14 @@ namespace parseManager
 			_defineClassObject = defineConstructor.Invoke(new object[]{ });
 			Parse();
 		}
-		public int InvokeR(string method, object[] args)
+		public object InvokeR(string method, object[] args)
 		{ // TODO collect the returned arguments if any
 			if (!_hasDefine)
-				return -1;
+				return null;
 			_defineMethod = _defineType.GetMethod(method);
-			object rets = _defineMethod.Invoke(_defineClassObject, args);
-			Console.WriteLine(rets);
-			return 0;
+			return _defineMethod.Invoke(_defineClassObject, args);
 		}
-		public long InvokeNR(string method, object[] args)
+		public int InvokeNR(string method, object[] args)
 		{ // Simple Invoking!
 			if (!_hasDefine)
 				return -1;
@@ -108,41 +122,71 @@ namespace parseManager
 			_defineMethod.Invoke(_defineClassObject, args);
 			return 0;
 		}
-		public void SetBlock(string BLOCK){
+		public void SetBlock(string BLOCK)
+		{
 			chunk cchunk;
-			if(_chunks.TryGetValue(BLOCK, out cchunk)){
-				_currentChunk=cchunk;
+			if (_chunks.TryGetValue(BLOCK, out cchunk)) {
+				_currentChunk = cchunk;
 			} else {
 				PushError("Attempt to JUMP to a non existing block!");
 			}
 		}
-		public void SetBlock(){
+		public ENV GetENV(){
+			return _defualtENV;
+		}
+		public void SetENV(){
+			_defualtENV=_mainENV;
+		}
+		public void SetENV(ENV o){
+			_defualtENV=o;
+		}
+		public void SetBlock(chunk BLOCK)
+		{
+			_currentChunk = BLOCK;
+		}
+		public void SetBlock()
+		{
 			chunk cchunk;
-			if(_chunks.TryGetValue(_entry, out cchunk)){
-				_currentChunk=cchunk;
+			if (_chunks.TryGetValue(_entry, out cchunk)) {
+				_currentChunk = cchunk;
 			} else {
 				PushError("Entrypoint is Invalid!");
 			}
 		}
-		public void PushError(string err){
+		public void PushError(string err)
+		{
 			Console.WriteLine(err);
 		}
 		public nextType Next(string BLOCK)
 		{
-			if(_currentChunk==null){
+			if (_currentChunk == null) {
 				SetBlock(BLOCK);
 			}
 			return Next();
 		}
+		/*
+		 * THE NEXT METHOD
+		 */ 
 		public nextType Next()
 		{
-			nextType tempReturn = new nextType("method");
-			if(_currentChunk==null){
+			nextType tempReturn = new nextType();
+			if (_currentChunk == null) {
 				SetBlock();
 			}
-			// TODO Add commands lol 
-			var FuncWReturn = Regex.Match(_currentChunk.GetLine(), "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.+)\\)");
-			var FuncWOReturn = Regex.Match(_currentChunk.GetLine(), @"^([a-zA-Z0-9_]+)\s?\((.+)\)");
+			// TODO Add commands lol
+			string currentline = _currentChunk.GetLine();
+			if (currentline == null) {
+				if (_flags["leaking"]) {
+					SetBlock(_currentChunk.GetNextChunk());
+					return Next();
+				} else {
+					tempReturn.SetCMDType("EOF");
+					tempReturn.SetText("Reached the end of the file!");
+					return tempReturn;
+				}
+			}
+			var FuncWReturn = Regex.Match(currentline, "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.+)\\)");
+			var FuncWOReturn = Regex.Match(currentline, @"^([a-zA-Z0-9_]+)\s?\((.+)\)");
 			// FuncWOReturn. // TODO Fix This stuff
 			return tempReturn;
 		}
@@ -155,17 +199,25 @@ namespace parseManager
 		string _type;
 		string _text;
 		Dictionary<string, object> _other = new Dictionary<string, object>();
+		public nextType()
+		{
+			_type = "UNSET";
+		}
 		public nextType(string type)
 		{
 			_type = type;
 		}
-		public string GetNextType()
+		public string GetCMDType()
 		{
 			return _type;
 		}
 		public void SetText(string text)
 		{
 			_text = text;
+		}
+		public void SetCMDType(string type)
+		{
+			_type = type;
 		}
 		public string GetText()
 		{
@@ -180,6 +232,18 @@ namespace parseManager
 			_other[varname] = data;
 		}
 	}
+	public class CMD
+	{
+		string _line;
+		parseManager _parse;
+		public CMD(string line,parseManager parse){
+			_line=line;
+			_parse=parse;
+		}
+		public void Run(){
+			// TODO Finish this
+		}
+	}
 	public class chunk
 	{
 		string _BLOCK;
@@ -187,6 +251,7 @@ namespace parseManager
 		string _pureType;
 		string[] lines;
 		int _pos = 0;
+		chunk _next=null;
 		void _clean(string cont)
 		{
 			var m = Regex.Match(_type, @"([a-zA-Z0-9_]+)");
@@ -213,13 +278,26 @@ namespace parseManager
 			_type = "CODEBLOCK";
 			_clean(cont);
 		}
+		public void SetNextChunk(chunk next){
+			_next=next;
+		}
+		public chunk GetNextChunk(){
+			return _next;
+		}
+		public chunk SetNextChunk(){
+			return _next;
+		}
 		public string[] GetLines()
 		{
 			return lines;
 		}
 		public string GetLine()
 		{
-			return lines[_pos++];
+			string temp = lines[_pos++];
+			if (_pos == lines.Length) {
+				return null;
+			}
+			return temp;
 		}
 		public int GetPos()
 		{
@@ -242,12 +320,45 @@ namespace parseManager
 			return _type;
 		}
 	}
+	public class ENV
+	{
+		ENV _Parent;
+		Dictionary<string, object> _vars = new Dictionary<string, object>();
+		public void SetParent(ENV other){
+			_Parent=other;
+		}
+		object this[string ind]{
+			get{
+				object obj;
+				if(_vars.TryGetValue(ind, out obj)){
+					return obj;
+				} else {
+					if(_Parent!=null){
+						return _Parent[ind];
+					} else {
+						return null;
+					}
+				}
+			}
+			set{
+				_vars[ind] = value;
+			}
+		}
+	}
 }
 /*
  * The Standard Methods!
  */
 public class standardParseDefine
 {
+	public void EXIT()
+	{
+		// TODO Exit the script
+	}
+	public void QUIT()
+	{
+		// TODO Quit the script
+	}
 	public void GOTO(string label)
 	{
 		// TODO goto a label in the script
@@ -279,5 +390,8 @@ public class standardParseDefine
 	public double MOD(double a, double b)
 	{
 		return a % b;
+	}
+	public int[] TEST(){
+		return new int[]{1,2,3};
 	}
 }

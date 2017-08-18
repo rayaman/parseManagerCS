@@ -3,12 +3,10 @@ LOAD test.dat
 [START]{
 	a=10>1
 	b=10<1
-	--[[
-		Fat Comment Sigh...
-	]]
 	"test: $a$ $b$"
 	test["name"]="Ryan"
 	name=test["name"]
+	-- test
 	"Hi $test[name]$! $name$"
 	testfunc("hello",(5!),15@1)
 	test("hello",sqrt(5!),(15@1)/2)

@@ -25,7 +25,12 @@ namespace parseManager
 		public static void Main(string[] args)
 		{
 			parseManager test = new parseManager("parsetest2.txt", "define"); // define is where your methods will be held
-			test.Next(); // TODO implement the next method
+			nextType next = test.Next(); // TODO implement the next method
+			while(next.GetCMDType()!="EOF"){
+				Console.Write(next.GetText());
+				next = test.Next();
+			}
+			//var temp=test.InvokeR("TEST",new object[]{});
 			Console.Write("Press any key to continue . . . ");
 			Console.ReadKey(true);
 		}
