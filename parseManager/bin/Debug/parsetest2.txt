@@ -1,7 +1,11 @@
 ENTRY START
+LOAD test.dat
 [START]{
 	a=10>1
 	b=10<1
+	--[[
+		Fat Comment Sigh...
+	]]
 	"test: $a$ $b$"
 	test["name"]="Ryan"
 	name=test["name"]

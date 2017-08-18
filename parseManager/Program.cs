@@ -7,18 +7,16 @@
  * To change this template use Tools | Options | Coding | Edit Standard Headers.
  */
 using System;
-
-
-public class define
+public class define : standardParseDefine // If you want the standard methods you must include this
 {
-    public void testM(string arg1)
-    {
-    	Console.WriteLine(arg1);
-    }
-    public void testM2(string arg1)
-    {
-    	Console.WriteLine(arg1 + " it works!!!");
-    }
+	public void testM(string arg1)
+	{
+		Console.WriteLine(arg1);
+	}
+	public void testM2(string arg1)
+	{
+		Console.WriteLine(arg1 + " it works!!!");
+	}
 }
 namespace parseManager
 {
@@ -26,9 +24,8 @@ namespace parseManager
 	{
 		public static void Main(string[] args)
 		{
-			Console.WriteLine("Hello World!");
-			parseManager test = new parseManager("parsetest2.txt","define");
-			test.invokeA("testM",new object[]{"This is invoked!"});
+			parseManager test = new parseManager("parsetest2.txt", "define"); // define is where your methods will be held
+			test.Next(); // TODO implement the next method
 			Console.Write("Press any key to continue . . . ");
 			Console.ReadKey(true);
 		}
