@@ -11,6 +11,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Reflection;
+using parseManager;
 namespace parseManager
 {
 	/// <summary>
@@ -26,17 +27,23 @@ namespace parseManager
 		MethodInfo _defineMethod;
 		object _defineClassObject;
 		chunk _currentChunk;
-		chunk _lastChunk=null;
+		chunk _lastChunk = null;
 		readonly ENV _mainENV = new ENV();
-		ENV _defualtENV = _mainENV;
+		public ENV _defualtENV;
 		Dictionary<string, bool> _flags = new Dictionary<string, bool>();
 		Dictionary<string, chunk> _chunks = new Dictionary<string, chunk>();
 		Dictionary<string, string> _methods = new Dictionary<string, string>();
-		void InitFlags(){
-			_flags.Add("leaking",false);
-			_flags.Add("forseelabels",true);
-			_flags.Add("debugging",false);
-			_flags.Add("topdown",true);
+		void InitFlags()
+		{
+			_flags.Add("leaking", false);
+			_flags.Add("forseelabels", true);
+			_flags.Add("debugging", false);
+			_flags.Add("topdown", true);
+		}
+		void debug(object msg)
+		{
+			if (_flags["debugging"])
+				Console.WriteLine(msg);
 		}
 		void _Parse(string data)
 		{
@@ -57,14 +64,14 @@ namespace parseManager
 				int loc = Blck.IndexOf(":");
 				if (loc != -1) {
 					_chunks[Blck.Substring(0, loc)] = new chunk(Blck.Substring(0, loc), Cont, Blck.Substring(loc + 1));
-					Blck=Blck.Substring(0, loc);
+					Blck = Blck.Substring(0, loc);
 				} else {
 					_chunks[Blck] = new chunk(Blck, Cont);
 				}
-				if(_lastChunk!=null){
+				if (_lastChunk != null) {
 					_lastChunk.SetNextChunk(_chunks[Blck]);
 				}
-				_lastChunk=_chunks[Blck];
+				_lastChunk = _chunks[Blck];
 			}
 		}
 		void Parse()
@@ -94,6 +101,7 @@ namespace parseManager
 			InitFlags();
 			_filepath = filepath;
 			_hasDefine = false;
+			_defualtENV = _mainENV;
 			Parse();
 		}
 		public parseManager(string filepath, string define)
@@ -105,6 +113,7 @@ namespace parseManager
 			_defineType = Type.GetType(define);
 			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
 			_defineClassObject = defineConstructor.Invoke(new object[]{ });
+			_defualtENV = _mainENV;
 			Parse();
 		}
 		public object InvokeR(string method, object[] args)
@@ -131,14 +140,17 @@ namespace parseManager
 				PushError("Attempt to JUMP to a non existing block!");
 			}
 		}
-		public ENV GetENV(){
+		public ENV GetENV()
+		{
 			return _defualtENV;
 		}
-		public void SetENV(){
-			_defualtENV=_mainENV;
+		public void SetENV()
+		{
+			_defualtENV = _mainENV;
 		}
-		public void SetENV(ENV o){
-			_defualtENV=o;
+		public void SetENV(ENV o)
+		{
+			_defualtENV = o;
 		}
 		public void SetBlock(chunk BLOCK)
 		{
@@ -164,36 +176,260 @@ namespace parseManager
 			}
 			return Next();
 		}
-		/*
-		 * THE NEXT METHOD
-		 */ 
 		public nextType Next()
 		{
+			GLOBALS.SetPM(this);
 			nextType tempReturn = new nextType();
 			if (_currentChunk == null) {
 				SetBlock();
 			}
 			// TODO Add commands lol
-			string currentline = _currentChunk.GetLine();
-			if (currentline == null) {
+			//Console.WriteLine(_currentChunk.GetPos());
+			CMD cCMD = _currentChunk.GetCLine();
+			object[] stuff;
+			if (cCMD == null) {
 				if (_flags["leaking"]) {
 					SetBlock(_currentChunk.GetNextChunk());
 					return Next();
+				}
+				tempReturn.SetCMDType("EOF");
+				tempReturn.SetText("Reached the end of the file!");
+				return tempReturn;
+			}
+			string type = cCMD.GetCMDType();
+			stuff = cCMD.GetArgs();
+			//Console.WriteLine(type);
+			if (type == "FUNC") {
+				string func = (string)stuff[0];
+				string[] args = (string[])stuff[1];
+				//debug(args.Length);
+				if (args.Length == 1 && args[0] == "") { // assume no args inserted!
+					InvokeNR(func, new object[]{ });
 				} else {
-					tempReturn.SetCMDType("EOF");
-					tempReturn.SetText("Reached the end of the file!");
-					return tempReturn;
+					InvokeNR(func, ResolveVar(args));
+				}
+				tempReturn.SetCMDType("method");
+				tempReturn.SetText("INVOKED METHOD: " + func);
+			} else if (type == "LINE") {
+				//Console.WriteLine(stuff[0]);
+				tempReturn.SetCMDType("line");
+				tempReturn.SetText(parseHeader((string)stuff[0]));
+			}
+			return tempReturn;
+		}
+		public string parseHeader(string header)
+		{
+			var results = Regex.Matches(header, @"(\$.*?\$)");
+			int len = results.Count;
+			string str;
+			object temp;
+			for (int i = 0; i < len; i++) {
+				str = results[i].ToString();
+				if (isVar(str.Substring(1, str.Length - 2), out temp)) {
+					header = header.Replace(results[i].ToString(), temp.ToString());
+				} else {
+					header = header.Replace(results[i].ToString(), "null");
 				}
 			}
-			var FuncWReturn = Regex.Match(currentline, "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.+)\\)");
-			var FuncWOReturn = Regex.Match(currentline, @"^([a-zA-Z0-9_]+)\s?\((.+)\)");
-			// FuncWOReturn. // TODO Fix This stuff
-			return tempReturn;
+			return header;
+		}
+		public object[] ResolveVar(string[] v)
+		{
+			//_defualtENV
+			int len = v.Length;
+			object[] args = new object[len];
+			object val;
+			double num;
+			bool boo;
+			for (int i = 0; i < len; i++) {
+				if (isVar(v[i], out val)) {
+					args[i] = val;
+				} else if (double.TryParse(v[i], out num)) {
+					args[i] = num;
+					debug("NUMBER: " + num);
+				} else if (v[i][0] == '"' && v[i][v[i].Length - 1] == '"') {
+					args[i] = parseHeader(v[i].Substring(1, v[i].Length - 2));
+					debug("STRING: " + args[i]);
+				} else if (bool.TryParse(v[i], out boo)) {
+					args[i] = boo;
+					debug("BOOL: " + boo);
+				} else {
+					args[i] = null;
+				}
+			}
+			return args;
+		}
+		public bool isVar(string val, out object v)
+		{
+			if (_defualtENV[val] != null) {
+				v = _defualtENV[val];
+				return true;
+			}
+			v = null;
+			return false;
 		}
 	}
 	/*
 	 * Helper Classes
 	 */
+	public class chunk
+	{
+		string _BLOCK;
+		string _type;
+		string _pureType;
+		string[] _lines;
+		List<CMD> _compiledlines = new List<CMD>();
+		int _pos = 0;
+		chunk _next = null;
+		void _clean(string cont)
+		{
+			var m = Regex.Match(_type, @"([a-zA-Z0-9_]+)");
+			_pureType = m.Groups[1].ToString();
+			string tCont = Regex.Replace(cont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"\-\-.+\r\n", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"\-\-.+\n", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"\t", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"\n\n", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"\r\n\r\n", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
+			_lines = tCont.Split(new [] { "\r\n", "\n" }, StringSplitOptions.None);
+			compile(); // compiles the code into something that can beused quickly
+		}
+		void compile()
+		{
+			string temp;
+			for (int i = 0; i < _lines.Length - 1; i++) {
+				temp = _lines[i];
+				var FuncWReturn = Regex.Match(temp, "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.*)\\)");
+				var FuncWOReturn = Regex.Match(temp, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
+				var pureLine = Regex.Match(temp, "^\"(.+)\"");
+				if (FuncWReturn.ToString() != "") {
+					string var1 = (FuncWReturn.Groups[1]).ToString();
+					string func = (FuncWReturn.Groups[2]).ToString();
+					string args = (FuncWReturn.Groups[3]).ToString();
+					string[] retargs = var1.Split(',');
+					string[] result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					_compiledlines.Add(new CMD("FUNC_R", new object[] {
+					                           	retargs,
+					                           	func,
+					                           	result
+					                           }));
+					//Console.WriteLine("FUNV_R: "+i);
+				} else if (FuncWOReturn.ToString() != "") {
+					string func = (FuncWOReturn.Groups[1]).ToString();
+					string args = (FuncWOReturn.Groups[2]).ToString();
+					string[] result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					_compiledlines.Add(new CMD("FUNC", new object[]{ func, result }));
+					//Console.WriteLine("FUNC: "+i);
+				} else if (pureLine.ToString() != "") {
+					_compiledlines.Add(new CMD("LINE", new object[]{ pureLine.ToString() }));
+					//Console.WriteLine("LINE: "+i);
+				} else {
+					_compiledlines.Add(new CMD("UNKNOWN", new object[]{ }));
+					//Console.WriteLine("UNKNOWN: "+i);
+				}
+				//Console.WriteLine(_compiledlines[i].GetCMDType());
+			}
+		}
+		public chunk(string name, string cont, string type)
+		{
+			_BLOCK = name;
+			_type = type;
+			_clean(cont);
+		}
+		public chunk(string name, string cont)
+		{
+			_BLOCK = name;
+			_type = "CODEBLOCK";
+			_clean(cont);
+		}
+		public void SetNextChunk(chunk next)
+		{
+			_next = next;
+		}
+		public chunk GetNextChunk()
+		{
+			return _next;
+		}
+		public chunk SetNextChunk()
+		{
+			return _next;
+		}
+		public string[] GetLines()
+		{
+			return _lines;
+		}
+		public string GetLine()
+		{
+			string temp = _lines[_pos];
+			if (_pos == _lines.Length) {
+				return null;
+			}
+			return temp;
+		}
+		public CMD GetCLine()
+		{
+			if (_pos < _compiledlines.Count) {
+				return _compiledlines[_pos++];
+			}
+			return null;
+		}
+		public int GetPos()
+		{
+			return _pos;
+		}
+		public void SetPos(int n)
+		{
+			_pos = n;
+		}
+		public void ResetPos()
+		{
+			_pos = 0;
+		}
+		public string GetChunkPType()
+		{
+			return _pureType;
+		}
+		public string GetChunkType()
+		{
+			return _type;
+		}
+	}
+	public class ENV
+	{
+		ENV _Parent;
+		Dictionary<string, object> _vars = new Dictionary<string, object>();
+		void SetParent(ENV other)
+		{
+			_Parent = other;
+		}
+		public bool TryGetValue(string ind, out object obj)
+		{
+			if (this[ind] != null) {
+				obj = this[ind];
+				return true;
+			}
+			obj = null;
+			return false;
+		}
+		public object this[string ind] {
+			get {
+				object obj;
+				if (_vars.TryGetValue(ind, out obj)) {
+					return obj;
+				}
+				if (_Parent != null) {
+					return _Parent[ind];
+				} else {
+					return null;
+				}
+			}
+			set {
+				_vars[ind] = value;
+			}
+		}
+	}
 	public class nextType
 	{
 		string _type;
@@ -232,123 +468,48 @@ namespace parseManager
 			_other[varname] = data;
 		}
 	}
+
 	public class CMD
 	{
-		string _line;
-		parseManager _parse;
-		public CMD(string line,parseManager parse){
-			_line=line;
-			_parse=parse;
-		}
-		public void Run(){
-			// TODO Finish this
-		}
-	}
-	public class chunk
-	{
-		string _BLOCK;
 		string _type;
-		string _pureType;
-		string[] lines;
-		int _pos = 0;
-		chunk _next=null;
-		void _clean(string cont)
+		object[] _args;
+		public CMD(string type, object[] args)
 		{
-			var m = Regex.Match(_type, @"([a-zA-Z0-9_]+)");
-			_pureType = m.Groups[1].ToString();
-			string tCont = Regex.Replace(cont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\-\-.+\r\n", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\-\-.+\n", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\t", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\n\n", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\r\n\r\n", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
-			lines = tCont.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None);
-		}
-		public chunk(string name, string cont, string type)
-		{
-			_BLOCK = name;
 			_type = type;
-			_clean(cont);
+			_args = args;
 		}
-		public chunk(string name, string cont)
-		{
-			_BLOCK = name;
-			_type = "CODEBLOCK";
-			_clean(cont);
-		}
-		public void SetNextChunk(chunk next){
-			_next=next;
-		}
-		public chunk GetNextChunk(){
-			return _next;
-		}
-		public chunk SetNextChunk(){
-			return _next;
-		}
-		public string[] GetLines()
-		{
-			return lines;
-		}
-		public string GetLine()
-		{
-			string temp = lines[_pos++];
-			if (_pos == lines.Length) {
-				return null;
-			}
-			return temp;
-		}
-		public int GetPos()
-		{
-			return _pos;
-		}
-		public void SetPos(int n)
-		{
-			_pos = n;
-		}
-		public void ResetPos()
-		{
-			_pos = 0;
-		}
-		public string GetChunkPType()
-		{
-			return _pureType;
-		}
-		public string GetChunkType()
+		public string GetCMDType()
 		{
 			return _type;
 		}
-	}
-	public class ENV
-	{
-		ENV _Parent;
-		Dictionary<string, object> _vars = new Dictionary<string, object>();
-		public void SetParent(ENV other){
-			_Parent=other;
+		public object[] GetArgs()
+		{
+			return _args;
 		}
-		object this[string ind]{
-			get{
-				object obj;
-				if(_vars.TryGetValue(ind, out obj)){
-					return obj;
-				} else {
-					if(_Parent!=null){
-						return _Parent[ind];
-					} else {
-						return null;
-					}
-				}
-			}
-			set{
-				_vars[ind] = value;
-			}
+	}
+	/*
+	 * The Standard Methods!
+	 */
+	static class GLOBALS
+	{
+		static parseManager current;
+		static readonly ENV env = new ENV();
+		public static object GetData(string ind)
+		{
+			return env[ind];
+		}
+		public static void AddData(string ind, object data)
+		{
+			env[ind] = data;
+		}
+		public static void SetPM(parseManager o){
+			current=o;
+		}
+		public static parseManager GetPM(){
+			return current;
 		}
 	}
 }
-/*
- * The Standard Methods!
- */
 public class standardParseDefine
 {
 	public void EXIT()
@@ -390,8 +551,5 @@ public class standardParseDefine
 	public double MOD(double a, double b)
 	{
 		return a % b;
-	}
-	public int[] TEST(){
-		return new int[]{1,2,3};
 	}
 }

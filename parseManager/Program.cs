@@ -7,15 +7,33 @@
  * To change this template use Tools | Options | Coding | Edit Standard Headers.
  */
 using System;
+using parseManager; // IMPORTANT
 public class define : standardParseDefine // If you want the standard methods you must include this
 {
-	public void testM(string arg1)
+	public void testM(object arg1)
 	{
 		Console.WriteLine(arg1);
 	}
 	public void testM2(string arg1)
 	{
 		Console.WriteLine(arg1 + " it works!!!");
+	}
+	public void TEST()
+	{
+		var test=GLOBALS.GetPM();
+		var env=test.GetENV();
+		Console.WriteLine(env["test"]);
+	}
+	public void TEST2(object msg)
+	{
+		Console.WriteLine(msg);
+	}
+	public void TEST3(double msg, string msg2)
+	{
+		Console.WriteLine(msg + "|" + msg2);
+	}
+	public double TEST4(double num){
+		return num+1;
 	}
 }
 namespace parseManager
@@ -25,9 +43,17 @@ namespace parseManager
 		public static void Main(string[] args)
 		{
 			parseManager test = new parseManager("parsetest2.txt", "define"); // define is where your methods will be held
+			var env = test.GetENV();
+			env["test"]="TEST!";
+			env["test2"]=12345;
 			nextType next = test.Next(); // TODO implement the next method
+			string type;
 			while(next.GetCMDType()!="EOF"){
-				Console.Write(next.GetText());
+				type = next.GetCMDType();
+				if(type=="line"){
+					Console.Write(next.GetText());
+					Console.ReadLine();
+				}
 				next = test.Next();
 			}
 			//var temp=test.InvokeR("TEST",new object[]{});
