@@ -179,13 +179,11 @@ namespace parseManager
 		public nextType Next()
 		{
 			GLOBALS.SetPM(this);
-			nextType tempReturn = new nextType();
+			var tempReturn = new nextType();
 			if (_currentChunk == null) {
 				SetBlock();
 			}
-			// TODO Add commands lol
-			//Console.WriteLine(_currentChunk.GetPos());
-			CMD cCMD = _currentChunk.GetCLine();
+			var cCMD = _currentChunk.GetCLine();
 			object[] stuff;
 			if (cCMD == null) {
 				if (_flags["leaking"]) {
@@ -196,13 +194,11 @@ namespace parseManager
 				tempReturn.SetText("Reached the end of the file!");
 				return tempReturn;
 			}
-			string type = cCMD.GetCMDType();
+			var type = cCMD.GetCMDType();
 			stuff = cCMD.GetArgs();
-			//Console.WriteLine(type);
 			if (type == "FUNC") {
-				string func = (string)stuff[0];
-				string[] args = (string[])stuff[1];
-				//debug(args.Length);
+				var func = (string)stuff[0];
+				var args = (string[])stuff[1];
 				if (args.Length == 1 && args[0] == "") { // assume no args inserted!
 					InvokeNR(func, new object[]{ });
 				} else {
@@ -211,9 +207,29 @@ namespace parseManager
 				tempReturn.SetCMDType("method");
 				tempReturn.SetText("INVOKED METHOD: " + func);
 			} else if (type == "LINE") {
-				//Console.WriteLine(stuff[0]);
 				tempReturn.SetCMDType("line");
 				tempReturn.SetText(parseHeader((string)stuff[0]));
+			} else if (type == "FUNC_R") {
+				var retargs = (string[])stuff[0];
+				var func = (string)stuff[1];
+				var args = (string[])stuff[2];
+				object data;
+				if (args.Length == 1 && args[0] == "") { // assume no args inserted!
+					data = InvokeR(func, new object[]{ });
+				} else {
+					data = InvokeR(func, ResolveVar(args));
+				}
+				// For Now handle 1 var name to 1 value
+				var env = GetENV();
+				env[retargs[0]] = data;
+			} else if(type=="ASSIGN"){
+				var vars=(string[])stuff[0];
+				var vals=(string[])stuff[1];
+				var env = GetENV();
+				var types=ResolveVar(vals);
+				for(int i=0;i<types.Length;i++){
+					env[vars[i]]=types[i];
+				}
 			}
 			return tempReturn;
 		}
@@ -236,8 +252,8 @@ namespace parseManager
 		public object[] ResolveVar(string[] v)
 		{
 			//_defualtENV
-			int len = v.Length;
-			object[] args = new object[len];
+			var len = v.Length;
+			var args = new object[len];
 			object val;
 			double num;
 			bool boo;
@@ -285,7 +301,7 @@ namespace parseManager
 		{
 			var m = Regex.Match(_type, @"([a-zA-Z0-9_]+)");
 			_pureType = m.Groups[1].ToString();
-			string tCont = Regex.Replace(cont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
+			var tCont = Regex.Replace(cont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\-\-.+\r\n", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\-\-.+\n", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\t", "", RegexOptions.Multiline);
@@ -304,30 +320,27 @@ namespace parseManager
 				var FuncWReturn = Regex.Match(temp, "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.*)\\)");
 				var FuncWOReturn = Regex.Match(temp, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
 				var pureLine = Regex.Match(temp, "^\"(.+)\"");
+				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)=([a-zA-Z0-9_\",\\[\\]]+)");
 				if (FuncWReturn.ToString() != "") {
-					string var1 = (FuncWReturn.Groups[1]).ToString();
-					string func = (FuncWReturn.Groups[2]).ToString();
-					string args = (FuncWReturn.Groups[3]).ToString();
-					string[] retargs = var1.Split(',');
-					string[] result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
-					_compiledlines.Add(new CMD("FUNC_R", new object[] {
-					                           	retargs,
-					                           	func,
-					                           	result
-					                           }));
-					//Console.WriteLine("FUNV_R: "+i);
+					var var1 = (FuncWReturn.Groups[1]).ToString();
+					var func = (FuncWReturn.Groups[2]).ToString();
+					var args = (FuncWReturn.Groups[3]).ToString();
+					var retargs = var1.Split(',');
+					var result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					_compiledlines.Add(new CMD("FUNC_R", new object[] { retargs, func, result }));
 				} else if (FuncWOReturn.ToString() != "") {
-					string func = (FuncWOReturn.Groups[1]).ToString();
-					string args = (FuncWOReturn.Groups[2]).ToString();
-					string[] result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					var func = (FuncWOReturn.Groups[1]).ToString();
+					var args = (FuncWOReturn.Groups[2]).ToString();
+					var result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
 					_compiledlines.Add(new CMD("FUNC", new object[]{ func, result }));
-					//Console.WriteLine("FUNC: "+i);
 				} else if (pureLine.ToString() != "") {
 					_compiledlines.Add(new CMD("LINE", new object[]{ pureLine.ToString() }));
-					//Console.WriteLine("LINE: "+i);
+				} else if (assignment.ToString() != "") {
+					var vars = Regex.Split(assignment.Groups[1].ToString(), ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					var vals = Regex.Split(assignment.Groups[2].ToString(), ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					_compiledlines.Add(new CMD("ASSIGN", new object[]{ vars, vals }));
 				} else {
 					_compiledlines.Add(new CMD("UNKNOWN", new object[]{ }));
-					//Console.WriteLine("UNKNOWN: "+i);
 				}
 				//Console.WriteLine(_compiledlines[i].GetCMDType());
 			}
@@ -502,10 +515,12 @@ namespace parseManager
 		{
 			env[ind] = data;
 		}
-		public static void SetPM(parseManager o){
-			current=o;
+		public static void SetPM(parseManager o)
+		{
+			current = o;
 		}
-		public static parseManager GetPM(){
+		public static parseManager GetPM()
+		{
 			return current;
 		}
 	}

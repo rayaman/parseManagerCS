@@ -1,11 +1,9 @@
 ENTRY START
-ENABLE debugging
 [START]{
-	"Hello!"
-	"NO!"
-	TEST()
-	TEST2("food is $test$")
-	TEST3(12345,test)
-	num=TEST4(15)
-	TEST2(num)
+	"Test 1:"
+	num=ADD(5,5)
+	"num = $num$"
+	c=5
+	a,b="sdf",true
+	"a,b,c = $a$ $b$ $c$"
 }
