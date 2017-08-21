@@ -55,7 +55,6 @@ namespace parseManager
 		}
 		void _Parse(string data)
 		{
-			string pattern = @"\[(.+)\][\r\n]*?\{([^\0]+?)\}";
 			foreach (Match m in Regex.Matches(data, @"LOAD ([a-zA-Z0-9_\./]+)")) {
 				Parse(m.Groups[1].ToString());
 			}
@@ -65,20 +64,21 @@ namespace parseManager
 			foreach (Match m in Regex.Matches(data, @"ENTRY ([a-zA-Z0-9_\./]+)")) {
 				_entry = m.Groups[1].ToString();
 			}
-			var match = Regex.Matches(data, pattern);
+			var match = Regex.Matches(data, @"\[(.+)\][\r\n]*?\{([^\0]+?)\}");
+			var count=0;
 			foreach (Match m in match) {
 				string Blck = m.Groups[1].ToString();
 				string Cont = m.Groups[2].ToString();
-				int loc = Blck.IndexOf(":");
+				int loc = Blck.IndexOf(":", StringComparison.Ordinal);
 				if (loc != -1) {
 					_chunks[Blck.Substring(0, loc)] = new chunk(Blck.Substring(0, loc), Cont, Blck.Substring(loc + 1));
 					Blck = Blck.Substring(0, loc);
 				} else {
 					_chunks[Blck] = new chunk(Blck, Cont);
 				}
-				if (_lastChunk != null) {
+				count++;
+				if (_lastChunk != null)
 					_lastChunk.SetNextChunk(_chunks[Blck]);
-				}
 				_lastChunk = _chunks[Blck];
 			}
 		}
@@ -100,9 +100,9 @@ namespace parseManager
 				Console.WriteLine("Load '" + filename + "' File not found. Loading failled!");
 			}
 		}
-		public int RunCode(string code)
+		public void ParseCode(string code)
 		{
-			return 0; // TODO Add runcode stuff so constructs and functions can work!
+			_Parse(code);
 		}
 		public chunk[] GetChunks(){
 			var chunks = _chunks.Values;
@@ -217,8 +217,11 @@ namespace parseManager
 			object[] stuff;
 			if (cCMD == null) {
 				if (_flags["leaking"] && _active) {
-					SetBlock(_currentChunk.GetNextChunk());
-					return Next();
+					var test=_currentChunk.GetNextChunk();
+					if(test!=null){
+						SetBlock(_currentChunk.GetNextChunk());
+						return Next();
+					}
 				}
 				tempReturn.SetCMDType("EOF");
 				tempReturn.SetText("Reached the end of the file!");
@@ -226,7 +229,65 @@ namespace parseManager
 			}
 			var type = cCMD.GetCMDType();
 			stuff = cCMD.GetArgs();
-			if (type == "LABEL") {
+			if(type=="LOGIC"){//{conds,andors,_funcif,_resultif,_funcelse,_resultelse}
+				var conds=(string[])stuff[0];
+				var andors=(string[])stuff[1];
+				var funcif=(string)stuff[2];
+				var argsif=(string[])stuff[3];
+				var funcelse=(string)stuff[4];
+				var argselse=(string[])stuff[5];
+				var objs=new object[conds.Length]; // contain the actual values of what is in the env
+				var truths= new bool[conds.Length/3];
+				var c=0;
+				//Console.WriteLine(string.Join(",",conds));
+				//Console.WriteLine(string.Join(",",andors));
+				for(int i=0;i<conds.Length;i+=3){
+					var condA=(object)ResolveVar(new []{conds[i]})[0];
+					var e=conds[i+1];
+					var condB=(object)ResolveVar(new []{conds[i+2]})[0];
+					if(e=="=="){
+						truths[c] = condA.ToString()==condB.ToString();
+					} else if(e==">="){
+						truths[c] = (double)condA>=(double)condB;
+					} else if(e=="<="){
+						truths[c] = (double)condA<=(double)condB;
+					} else if(e=="!=" || e=="~="){
+						truths[c] = condA.ToString()!=condB.ToString();
+					} else if(e==">"){
+						truths[c] = (double)condA>(double)condB;
+					} else if(e=="<"){
+						truths[c] = (double)condA<(double)condB;
+					} else {
+						PushError("Invalid conditional test! "+e+" is not valid!");
+					}
+					c++;
+				}
+				var truth=truths[0];
+				if(truths.Length==1 && truth){
+					InvokeNR(funcif, ResolveVar(argsif));
+				} else if(truths.Length==1) {
+					InvokeNR(funcelse, ResolveVar(argselse));
+				} else {
+					for(int i=1;i<andors.Length;i++){
+						if(andors[i-1]=="a"){
+							truth=truth && truths[i];
+						} else if(andors[i-1]=="o"){
+							truth=truth || truths[i];
+						} else {
+							PushError("Invalid conditional test! "+andors[i-1]+" is not valid!");
+						}
+					}
+					if(truth){
+						Console.WriteLine(funcif);
+						InvokeNR(funcif, ResolveVar(argsif));
+					} else {
+						Console.WriteLine("|"+funcelse+"|");
+						InvokeNR(funcelse, ResolveVar(argselse));
+					}
+				}
+				tempReturn.SetCMDType("conditional");
+				tempReturn.SetText("test turned out to be: "+truth);
+			} else if (type == "LABEL") {
 				cCMD = _currentChunk.GetCLine();
 				if (cCMD == null) {
 					if (_flags["leaking"] && _active) {
@@ -263,7 +324,6 @@ namespace parseManager
 				} else {
 					data = InvokeR(func, ResolveVar(args));
 				}
-				// For Now handle 1 var name to 1 value
 				var env = GetENV();
 				env[retargs[0]] = data;
 				tempReturn.SetCMDType("method");
@@ -374,19 +434,46 @@ namespace parseManager
 				var logic = Regex.Match(temp,@"if\s*(.+)\s*then\s*(.+?\))\s*\|\s*(.+?\))");
 				if(logic.ToString()!=""){
 					var condition = logic.Groups[1].ToString();
-					var _if = logic.Groups[2].ToString();
-					var _else = logic.Groups[3].ToString();
-					var temps = Regex.Match(condition,"(.+?)([and ]+?[or ]+)");
-					string[] conds;
-					if(temps.ToString()!=""){
-						var count=temps.Groups.Count;
-						conds= new string[count+1];
-						for(int b=1;b<temps.Groups.Count;b++){
-							conds[b]=temps.Groups[b].Value;
-							Console.WriteLine(conds[b]);
-						}
+					var tempif = logic.Groups[2].ToString();
+					var tempelse = logic.Groups[3].ToString();
+					var argsif=Regex.Match(tempif, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
+					var argselse=Regex.Match(tempelse, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
+					string _funcif = (argsif.Groups[1]).ToString();
+					var _argsif = (argsif.Groups[2]).ToString();
+					string[] _resultif = Regex.Split(_argsif, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					//Console.WriteLine(string.Join(",",_resultif));
+					string _funcelse = (argselse.Groups[1]).ToString();
+					var _argselse = (argselse.Groups[2]).ToString();
+					string[] _resultelse = Regex.Split(_argselse, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					//Console.WriteLine(string.Join(",",_resultelse));
+					var mm=Regex.Matches(condition,"(.+?)([and ]+?[or ]+)");
+					var conds = new string[(mm.Count+1)*3];
+					var andors = new string[mm.Count];
+					var count=0;
+					var p=0;
+					var p2=0;
+					foreach (Match m in mm) {
+						var s1 = m.Groups[1].ToString();
+						var s1p = Regex.Match(s1,"(.+?)([~!><=]+)+(.+)");
+						var s1a=s1p.Groups[1].ToString();
+						var s1b=s1p.Groups[2].ToString();
+						var s1c=s1p.Groups[3].ToString();
+						var s2 = m.Groups[2].ToString();
+						conds[p++]=s1a;
+						conds[p++]=s1b;
+						conds[p++]=s1c;
+						andors[p2++]=s2.Substring(1,1);
+						count+=s1.Length+s2.Length;
 					}
-					_compiledlines.Add(new CMD("LOGIC", new object[]{"Place holder",_if,_else}));
+					var s1p2 = Regex.Match(condition.Substring(count,condition.Length-count-1),"(.+?)([~!><=]+)+(.+)");
+					var s1a2=s1p2.Groups[1].ToString();
+					var s1b2=s1p2.Groups[2].ToString();
+					var s1c2=s1p2.Groups[3].ToString();
+					//Console.WriteLine(s1a2+"|"+s1b2+"|"+s1c2);
+					conds[p++]=s1a2;
+					conds[p++]=s1b2;
+					conds[p++]=s1c2;
+					_compiledlines.Add(new CMD("LOGIC", new object[]{conds,andors,_funcif,_resultif,_funcelse,_resultelse}));
 				} else if (label.ToString() != "") {
 					_labels[label.Groups[1].ToString()] = i;
 					_compiledlines.Add(new CMD("LABEL", new object[]{ }));
@@ -441,6 +528,9 @@ namespace parseManager
 			}
 			pos=-1;
 			return false;
+		}
+		public void RemoveNextChunk(){
+			_next = null;
 		}
 		public void SetNextChunk(chunk next)
 		{

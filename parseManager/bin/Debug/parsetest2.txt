@@ -1,7 +1,7 @@
 ENABLE leaking
 [TEST]{
 	"Jump was successful!"
-	GOTO("HERE")
+	--GOTO("HERE")
 }
 [START]{
 	"Test 1:"
@@ -11,9 +11,20 @@ ENABLE leaking
 	::HERE::
 	a,b="sdf",true
 	"a,b,c = $a$ $b$ $c$"
-	yum="TEST"
-	JUMP(yum)
+	food="yum" 
 	test=true
-	if count==stop and test==true then GOTO(end)|GOTO(loop)
+	stop=21
+	"Test 2:"
+	count=0
+	::loop::
+		if count>10 then GOTO("end")|GOTO("continue")
+		::continue::
+		"Count = $count$"
+		count=ADD(count,1)
+		if count>10 then GOTO("end")|GOTO("loop")
+	::end::
+	"Done!"
+	QUIT()
 }
+
 -- (count==stop and name=="bob") ? GOTO(end) : GOTO(loop)
