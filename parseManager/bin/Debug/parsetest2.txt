@@ -1,9 +1,19 @@
-ENTRY START
+ENABLE leaking
+[TEST]{
+	"Jump was successful!"
+	GOTO("HERE")
+}
 [START]{
 	"Test 1:"
 	num=ADD(5,5)
 	"num = $num$"
 	c=5
+	::HERE::
 	a,b="sdf",true
 	"a,b,c = $a$ $b$ $c$"
+	yum="TEST"
+	JUMP(yum)
+	test=true
+	if count==stop and test==true then GOTO(end)|GOTO(loop)
 }
+-- (count==stop and name=="bob") ? GOTO(end) : GOTO(loop)

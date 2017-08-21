@@ -8,7 +8,7 @@
  */
 using System;
 using parseManager; // IMPORTANT
-public class define : standardParseDefine // If you want the standard methods you must include this
+public class define : standardDefine // If you want the standard methods you must include this, Also this class cannot be static!
 {
 	public void testM(object arg1)
 	{

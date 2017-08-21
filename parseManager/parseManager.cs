@@ -21,6 +21,7 @@ namespace parseManager
 	{
 		string _filepath;
 		bool _hasDefine;
+		bool _active = true;
 		string _define;
 		string _entry = "START";
 		Type _defineType;
@@ -39,6 +40,13 @@ namespace parseManager
 			_flags.Add("forseelabels", true);
 			_flags.Add("debugging", false);
 			_flags.Add("topdown", true);
+		}
+		public bool GetFlag(string flag){
+			bool f;
+			if(_flags.TryGetValue(flag,out f)){
+				return f;
+			}
+			return false;
 		}
 		void debug(object msg)
 		{
@@ -96,6 +104,25 @@ namespace parseManager
 		{
 			return 0; // TODO Add runcode stuff so constructs and functions can work!
 		}
+		public chunk[] GetChunks(){
+			var chunks = _chunks.Values;
+			var temp = new chunk[_chunks.Count];
+			var i=0;
+			foreach(var item in _chunks)
+			{
+				temp[i]=item.Value;
+				i++;
+			}
+			return temp;
+		}
+		public chunk GetCurrentChunk()
+		{
+			return _currentChunk;
+		}
+		public void Deactivate()
+		{
+			_active = false;
+		}
 		public parseManager(string filepath)
 		{
 			InitFlags();
@@ -136,6 +163,7 @@ namespace parseManager
 			chunk cchunk;
 			if (_chunks.TryGetValue(BLOCK, out cchunk)) {
 				_currentChunk = cchunk;
+				_currentChunk.ResetPos();
 			} else {
 				PushError("Attempt to JUMP to a non existing block!");
 			}
@@ -161,6 +189,7 @@ namespace parseManager
 			chunk cchunk;
 			if (_chunks.TryGetValue(_entry, out cchunk)) {
 				_currentChunk = cchunk;
+				_currentChunk.ResetPos();
 			} else {
 				PushError("Entrypoint is Invalid!");
 			}
@@ -168,6 +197,7 @@ namespace parseManager
 		public void PushError(string err)
 		{
 			Console.WriteLine(err);
+			Deactivate();
 		}
 		public nextType Next(string BLOCK)
 		{
@@ -186,7 +216,7 @@ namespace parseManager
 			var cCMD = _currentChunk.GetCLine();
 			object[] stuff;
 			if (cCMD == null) {
-				if (_flags["leaking"]) {
+				if (_flags["leaking"] && _active) {
 					SetBlock(_currentChunk.GetNextChunk());
 					return Next();
 				}
@@ -196,6 +226,20 @@ namespace parseManager
 			}
 			var type = cCMD.GetCMDType();
 			stuff = cCMD.GetArgs();
+			if (type == "LABEL") {
+				cCMD = _currentChunk.GetCLine();
+				if (cCMD == null) {
+					if (_flags["leaking"] && _active) {
+						SetBlock(_currentChunk.GetNextChunk());
+						return Next();
+					}
+					tempReturn.SetCMDType("EOF");
+					tempReturn.SetText("Reached the end of the file!");
+					return tempReturn;
+				}
+				type = cCMD.GetCMDType();
+				stuff = cCMD.GetArgs();
+			}
 			if (type == "FUNC") {
 				var func = (string)stuff[0];
 				var args = (string[])stuff[1];
@@ -222,14 +266,18 @@ namespace parseManager
 				// For Now handle 1 var name to 1 value
 				var env = GetENV();
 				env[retargs[0]] = data;
-			} else if(type=="ASSIGN"){
-				var vars=(string[])stuff[0];
-				var vals=(string[])stuff[1];
+				tempReturn.SetCMDType("method");
+				tempReturn.SetText("INVOKED METHOD: " + func);
+			} else if (type == "ASSIGN") {
+				var vars = (string[])stuff[0];
+				var vals = (string[])stuff[1];
 				var env = GetENV();
-				var types=ResolveVar(vals);
-				for(int i=0;i<types.Length;i++){
-					env[vars[i]]=types[i];
+				var types = ResolveVar(vals);
+				for (int i = 0; i < types.Length; i++) {
+					env[vars[i]] = types[i];
 				}
+				tempReturn.SetCMDType("assignment");
+				tempReturn.SetText(_currentChunk.GetLine());
 			}
 			return tempReturn;
 		}
@@ -294,6 +342,7 @@ namespace parseManager
 		string _type;
 		string _pureType;
 		string[] _lines;
+		Dictionary<string, int> _labels = new Dictionary<string, int>();
 		List<CMD> _compiledlines = new List<CMD>();
 		int _pos = 0;
 		chunk _next = null;
@@ -310,7 +359,7 @@ namespace parseManager
 			tCont = Regex.Replace(tCont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
 			_lines = tCont.Split(new [] { "\r\n", "\n" }, StringSplitOptions.None);
-			compile(); // compiles the code into something that can beused quickly
+			compile(); // compiles the code into something that can be used quickly
 		}
 		void compile()
 		{
@@ -321,13 +370,33 @@ namespace parseManager
 				var FuncWOReturn = Regex.Match(temp, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
 				var pureLine = Regex.Match(temp, "^\"(.+)\"");
 				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)=([a-zA-Z0-9_\",\\[\\]]+)");
-				if (FuncWReturn.ToString() != "") {
+				var label = Regex.Match(temp, "::(.*)::");
+				var logic = Regex.Match(temp,@"if\s*(.+)\s*then\s*(.+?\))\s*\|\s*(.+?\))");
+				if(logic.ToString()!=""){
+					var condition = logic.Groups[1].ToString();
+					var _if = logic.Groups[2].ToString();
+					var _else = logic.Groups[3].ToString();
+					var temps = Regex.Match(condition,"(.+?)([and ]+?[or ]+)");
+					string[] conds;
+					if(temps.ToString()!=""){
+						var count=temps.Groups.Count;
+						conds= new string[count+1];
+						for(int b=1;b<temps.Groups.Count;b++){
+							conds[b]=temps.Groups[b].Value;
+							Console.WriteLine(conds[b]);
+						}
+					}
+					_compiledlines.Add(new CMD("LOGIC", new object[]{"Place holder",_if,_else}));
+				} else if (label.ToString() != "") {
+					_labels[label.Groups[1].ToString()] = i;
+					_compiledlines.Add(new CMD("LABEL", new object[]{ }));
+				} else if (FuncWReturn.ToString() != "") {
 					var var1 = (FuncWReturn.Groups[1]).ToString();
 					var func = (FuncWReturn.Groups[2]).ToString();
 					var args = (FuncWReturn.Groups[3]).ToString();
 					var retargs = var1.Split(',');
 					var result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
-					_compiledlines.Add(new CMD("FUNC_R", new object[] { retargs, func, result }));
+					_compiledlines.Add(new CMD("FUNC_R", new object[] { retargs, func,	result }));
 				} else if (FuncWOReturn.ToString() != "") {
 					var func = (FuncWOReturn.Groups[1]).ToString();
 					var args = (FuncWOReturn.Groups[2]).ToString();
@@ -342,7 +411,6 @@ namespace parseManager
 				} else {
 					_compiledlines.Add(new CMD("UNKNOWN", new object[]{ }));
 				}
-				//Console.WriteLine(_compiledlines[i].GetCMDType());
 			}
 		}
 		public chunk(string name, string cont, string type)
@@ -356,6 +424,23 @@ namespace parseManager
 			_BLOCK = name;
 			_type = "CODEBLOCK";
 			_clean(cont);
+		}
+		public string GetName(){
+			return _BLOCK;
+		}
+		public int GetLabel(string lab)
+		{
+			return _labels[lab];
+		}
+		public bool TryGetLabel(string lab, out int pos)
+		{
+			int p;
+			if(_labels.TryGetValue(lab, out p)){
+				pos=p;
+				return true;
+			}
+			pos=-1;
+			return false;
 		}
 		public void SetNextChunk(chunk next)
 		{
@@ -437,6 +522,31 @@ namespace parseManager
 				} else {
 					return null;
 				}
+			}
+			set {
+				_vars[ind] = value;
+			}
+		}
+	}
+	public class PList
+	{
+		readonly Dictionary<int, object> _vars = new Dictionary<int, object>();
+		public bool TryGetValue(int ind, out object obj)
+		{
+			if (this[ind] != null) {
+				obj = this[ind];
+				return true;
+			}
+			obj = null;
+			return false;
+		}
+		public object this[int ind] {
+			get {
+				object obj;
+				if (_vars.TryGetValue(ind, out obj)) {
+					return obj;
+				}
+				return null;
 			}
 			set {
 				_vars[ind] = value;
@@ -525,27 +635,50 @@ namespace parseManager
 		}
 	}
 }
-public class standardParseDefine
+public class standardDefine
 {
 	public void EXIT()
 	{
-		// TODO Exit the script
+		GLOBALS.GetPM().Deactivate();
 	}
 	public void QUIT()
 	{
-		// TODO Quit the script
+		Environment.Exit(0);
 	}
-	public void GOTO(string label)
+	public int GOTO(string label)
 	{
-		// TODO goto a label in the script
+		var test = GLOBALS.GetPM();
+		var c = test.GetCurrentChunk();
+		int pos;
+		if(c.TryGetLabel(label, out pos)){
+			c.SetPos(pos);
+			return 0;
+		} else if(test.GetFlag("forseelabels")){
+			var chunks = test.GetChunks();
+			for(int i=0;i<chunks.Length;i++){
+				if(chunks[i].TryGetLabel(label, out pos)){
+					test.SetBlock(chunks[i].GetName());
+					chunks[i].SetPos(pos);
+					return 0;
+				}
+			}
+		}
+		test.PushError("Unable to GOTO a non existing label: "+label+"!");
+		return 0;
 	}
 	public void JUMP(string block)
 	{
-		// TODO jump to a block
+		var test = GLOBALS.GetPM();
+		var c = test.GetCurrentChunk();
+		c.ResetPos();
+		test.SetBlock(block);
 	}
-	public void SKIP(int n)
+	public void SKIP(double n)
 	{
-		// TODO moves position of
+		var test = GLOBALS.GetPM();
+		var c = test.GetCurrentChunk();
+		var pos = c.GetPos();
+		c.SetPos(pos + (int)n);
 	}
 	public double ADD(double a, double b)
 	{
