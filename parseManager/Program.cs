@@ -8,6 +8,7 @@
  */
 using System;
 using parseManager; // IMPORTANT
+using NCalc;
 public class define : standardDefine // If you want the standard methods you must include this, Also this class cannot be static!
 {
 	public void testM(object arg1)
@@ -42,7 +43,8 @@ namespace parseManager
 	{
 		public static void Main(string[] args)
 		{
-			parseManager test = new parseManager("parsetest2.txt", "define"); // define is where your methods will be held
+			
+			parseManager test = new parseManager("parsetest2.txt"); // define is where your methods will be held
 			var env = test.GetENV();
 			env["test"]="TEST!";
 			env["test2"]=12345;
@@ -56,7 +58,6 @@ namespace parseManager
 				}
 				next = test.Next();
 			}
-			//var temp=test.InvokeR("TEST",new object[]{});
 			Console.Write("Press any key to continue . . . ");
 			Console.ReadKey(true);
 		}

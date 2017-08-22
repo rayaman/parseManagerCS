@@ -5,7 +5,9 @@ ENABLE leaking
 }
 [START]{
 	"Test 1:"
-	num=ADD(5,5)
+	t=15
+	test=2+t
+	"test = $test$"
 	"num = $num$"
 	c=5
 	::HERE::

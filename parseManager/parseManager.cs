@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Reflection;
 using parseManager;
+using NCalc;
 namespace parseManager
 {
 	/// <summary>
@@ -19,8 +20,8 @@ namespace parseManager
 	/// </summary>
 	public class parseManager
 	{
+		standardDefine _invoke = new standardDefine();
 		string _filepath;
-		bool _hasDefine;
 		bool _active = true;
 		string _define;
 		string _entry = "START";
@@ -34,6 +35,27 @@ namespace parseManager
 		Dictionary<string, bool> _flags = new Dictionary<string, bool>();
 		Dictionary<string, chunk> _chunks = new Dictionary<string, chunk>();
 		Dictionary<string, string> _methods = new Dictionary<string, string>();
+		public parseManager(string filepath)
+		{
+			InitFlags();
+			_filepath = filepath;
+			_defineType = Type.GetType("standardDefine");
+			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
+			_defineClassObject = defineConstructor.Invoke(new object[]{ });
+			_defualtENV = _mainENV;
+			Parse();
+		}
+		public parseManager(string filepath, string define)
+		{
+			InitFlags();
+			_define = define;
+			_filepath = filepath;
+			_defineType = Type.GetType(define);
+			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
+			_defineClassObject = defineConstructor.Invoke(new object[]{ });
+			_defualtENV = _mainENV;
+			Parse();
+		}
 		void InitFlags()
 		{
 			_flags.Add("leaking", false);
@@ -41,9 +63,10 @@ namespace parseManager
 			_flags.Add("debugging", false);
 			_flags.Add("topdown", true);
 		}
-		public bool GetFlag(string flag){
+		public bool GetFlag(string flag)
+		{
 			bool f;
-			if(_flags.TryGetValue(flag,out f)){
+			if (_flags.TryGetValue(flag, out f)) {
 				return f;
 			}
 			return false;
@@ -65,7 +88,7 @@ namespace parseManager
 				_entry = m.Groups[1].ToString();
 			}
 			var match = Regex.Matches(data, @"\[(.+)\][\r\n]*?\{([^\0]+?)\}");
-			var count=0;
+			var count = 0;
 			foreach (Match m in match) {
 				string Blck = m.Groups[1].ToString();
 				string Cont = m.Groups[2].ToString();
@@ -104,13 +127,13 @@ namespace parseManager
 		{
 			_Parse(code);
 		}
-		public chunk[] GetChunks(){
+		public chunk[] GetChunks()
+		{
 			var chunks = _chunks.Values;
 			var temp = new chunk[_chunks.Count];
-			var i=0;
-			foreach(var item in _chunks)
-			{
-				temp[i]=item.Value;
+			var i = 0;
+			foreach (var item in _chunks) {
+				temp[i] = item.Value;
 				i++;
 			}
 			return temp;
@@ -123,40 +146,26 @@ namespace parseManager
 		{
 			_active = false;
 		}
-		public parseManager(string filepath)
-		{
-			InitFlags();
-			_filepath = filepath;
-			_hasDefine = false;
-			_defualtENV = _mainENV;
-			Parse();
-		}
-		public parseManager(string filepath, string define)
-		{
-			InitFlags();
-			_define = define;
-			_hasDefine = true;
-			_filepath = filepath;
-			_defineType = Type.GetType(define);
-			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
-			_defineClassObject = defineConstructor.Invoke(new object[]{ });
-			_defualtENV = _mainENV;
-			Parse();
-		}
 		public object InvokeR(string method, object[] args)
-		{ // TODO collect the returned arguments if any
-			if (!_hasDefine)
-				return null;
+		{
+			//try{
 			_defineMethod = _defineType.GetMethod(method);
 			return _defineMethod.Invoke(_defineClassObject, args);
+//			} catch {
+//				PushError("Invalid method: "+method);
+//				return null;
+//			}
 		}
 		public int InvokeNR(string method, object[] args)
-		{ // Simple Invoking!
-			if (!_hasDefine)
-				return -1;
-			_defineMethod = _defineType.GetMethod(method);
-			_defineMethod.Invoke(_defineClassObject, args);
-			return 0;
+		{
+			try {
+				_defineMethod = _defineType.GetMethod(method);
+				_defineMethod.Invoke(_defineClassObject, args);
+				return 0;
+			} catch {
+				PushError("Invalid method: " + method);
+			}
+			return -1;
 		}
 		public void SetBlock(string BLOCK)
 		{
@@ -217,8 +226,8 @@ namespace parseManager
 			object[] stuff;
 			if (cCMD == null) {
 				if (_flags["leaking"] && _active) {
-					var test=_currentChunk.GetNextChunk();
-					if(test!=null){
+					var test = _currentChunk.GetNextChunk();
+					if (test != null) {
 						SetBlock(_currentChunk.GetNextChunk());
 						return Next();
 					}
@@ -229,64 +238,62 @@ namespace parseManager
 			}
 			var type = cCMD.GetCMDType();
 			stuff = cCMD.GetArgs();
-			if(type=="LOGIC"){//{conds,andors,_funcif,_resultif,_funcelse,_resultelse}
-				var conds=(string[])stuff[0];
-				var andors=(string[])stuff[1];
-				var funcif=(string)stuff[2];
-				var argsif=(string[])stuff[3];
-				var funcelse=(string)stuff[4];
-				var argselse=(string[])stuff[5];
-				var objs=new object[conds.Length]; // contain the actual values of what is in the env
-				var truths= new bool[conds.Length/3];
-				var c=0;
-				//Console.WriteLine(string.Join(",",conds));
-				//Console.WriteLine(string.Join(",",andors));
-				for(int i=0;i<conds.Length;i+=3){
-					var condA=(object)ResolveVar(new []{conds[i]})[0];
-					var e=conds[i+1];
-					var condB=(object)ResolveVar(new []{conds[i+2]})[0];
-					if(e=="=="){
-						truths[c] = condA.ToString()==condB.ToString();
-					} else if(e==">="){
-						truths[c] = (double)condA>=(double)condB;
-					} else if(e=="<="){
-						truths[c] = (double)condA<=(double)condB;
-					} else if(e=="!=" || e=="~="){
-						truths[c] = condA.ToString()!=condB.ToString();
-					} else if(e==">"){
-						truths[c] = (double)condA>(double)condB;
-					} else if(e=="<"){
-						truths[c] = (double)condA<(double)condB;
+			if (type == "LOGIC") {//{conds,andors,_funcif,_resultif,_funcelse,_resultelse}
+				var conds = (string[])stuff[0];
+				var andors = (string[])stuff[1];
+				var funcif = (string)stuff[2];
+				var argsif = (string[])stuff[3];
+				var funcelse = (string)stuff[4];
+				var argselse = (string[])stuff[5];
+				var objs = new object[conds.Length]; // contain the actual values of what is in the env
+				var truths = new bool[conds.Length / 3];
+				var c = 0;
+				for (int i = 0; i < conds.Length; i += 3) {
+					var condA = (object)ResolveVar(new []{ conds[i] })[0];
+					var e = conds[i + 1];
+					var condB = (object)ResolveVar(new []{ conds[i + 2] })[0];
+					if (e == "==") {
+						truths[c] = condA.ToString() == condB.ToString();
+					} else if (e == ">=") {
+						truths[c] = (double)condA >= (double)condB;
+					} else if (e == "<=") {
+						truths[c] = (double)condA <= (double)condB;
+					} else if (e == "!=" || e == "~=") {
+						truths[c] = condA.ToString() != condB.ToString();
+					} else if (e == ">") {
+						truths[c] = (double)condA > (double)condB;
+					} else if (e == "<") {
+						truths[c] = (double)condA < (double)condB;
 					} else {
-						PushError("Invalid conditional test! "+e+" is not valid!");
+						PushError("Invalid conditional test! " + e + " is not valid!");
 					}
 					c++;
 				}
-				var truth=truths[0];
-				if(truths.Length==1 && truth){
+				var truth = truths[0];
+				if (truths.Length == 1 && truth) {
 					InvokeNR(funcif, ResolveVar(argsif));
-				} else if(truths.Length==1) {
+				} else if (truths.Length == 1) {
 					InvokeNR(funcelse, ResolveVar(argselse));
 				} else {
-					for(int i=1;i<andors.Length;i++){
-						if(andors[i-1]=="a"){
-							truth=truth && truths[i];
-						} else if(andors[i-1]=="o"){
-							truth=truth || truths[i];
+					for (int i = 1; i < andors.Length; i++) {
+						if (andors[i - 1] == "a") {
+							truth = truth && truths[i];
+						} else if (andors[i - 1] == "o") {
+							truth = truth || truths[i];
 						} else {
-							PushError("Invalid conditional test! "+andors[i-1]+" is not valid!");
+							PushError("Invalid conditional test! " + andors[i - 1] + " is not valid!");
 						}
 					}
-					if(truth){
+					if (truth) {
 						Console.WriteLine(funcif);
 						InvokeNR(funcif, ResolveVar(argsif));
 					} else {
-						Console.WriteLine("|"+funcelse+"|");
+						Console.WriteLine("|" + funcelse + "|");
 						InvokeNR(funcelse, ResolveVar(argselse));
 					}
 				}
 				tempReturn.SetCMDType("conditional");
-				tempReturn.SetText("test turned out to be: "+truth);
+				tempReturn.SetText("test turned out to be: " + truth);
 			} else if (type == "LABEL") {
 				cCMD = _currentChunk.GetCLine();
 				if (cCMD == null) {
@@ -326,15 +333,17 @@ namespace parseManager
 				}
 				var env = GetENV();
 				env[retargs[0]] = data;
+				GLOBALS.Add_Var(retargs[0]);
 				tempReturn.SetCMDType("method");
 				tempReturn.SetText("INVOKED METHOD: " + func);
-			} else if (type == "ASSIGN") {
+			} else if (type == "ASSIGN") { // TODO add lists/dictonaries support
 				var vars = (string[])stuff[0];
 				var vals = (string[])stuff[1];
 				var env = GetENV();
 				var types = ResolveVar(vals);
 				for (int i = 0; i < types.Length; i++) {
 					env[vars[i]] = types[i];
+					GLOBALS.Add_Var(vars[i]);
 				}
 				tempReturn.SetCMDType("assignment");
 				tempReturn.SetText(_currentChunk.GetLine());
@@ -426,18 +435,25 @@ namespace parseManager
 			string temp;
 			for (int i = 0; i < _lines.Length - 1; i++) {
 				temp = _lines[i];
+				var pureLine = Regex.Match(temp, "^\"(.+)\"");
+				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)=([a-zA-Z\\|&\\^\\+\\-\\*/%0-9_\",\\[\\]]+)");
+				if (assignment.ToString() != "") { // TODO fix mess! or write own number calculator
+					var expression = new Expression(assignment.Groups[2].Value);
+					if (!expression.HasErrors()) {
+						temp=assignment.Groups[1].Value+"=CALC(\""+assignment.Groups[2]+"\")";
+					}
+				}
 				var FuncWReturn = Regex.Match(temp, "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.*)\\)");
 				var FuncWOReturn = Regex.Match(temp, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
-				var pureLine = Regex.Match(temp, "^\"(.+)\"");
-				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)=([a-zA-Z0-9_\",\\[\\]]+)");
 				var label = Regex.Match(temp, "::(.*)::");
-				var logic = Regex.Match(temp,@"if\s*(.+)\s*then\s*(.+?\))\s*\|\s*(.+?\))");
-				if(logic.ToString()!=""){
+				var logic = Regex.Match(temp, @"if\s*(.+)\s*then\s*(.+?\))\s*\|\s*(.+?\))");
+				
+				if (logic.ToString() != "") {
 					var condition = logic.Groups[1].ToString();
 					var tempif = logic.Groups[2].ToString();
 					var tempelse = logic.Groups[3].ToString();
-					var argsif=Regex.Match(tempif, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
-					var argselse=Regex.Match(tempelse, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
+					var argsif = Regex.Match(tempif, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
+					var argselse = Regex.Match(tempelse, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
 					string _funcif = (argsif.Groups[1]).ToString();
 					var _argsif = (argsif.Groups[2]).ToString();
 					string[] _resultif = Regex.Split(_argsif, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
@@ -446,34 +462,41 @@ namespace parseManager
 					var _argselse = (argselse.Groups[2]).ToString();
 					string[] _resultelse = Regex.Split(_argselse, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
 					//Console.WriteLine(string.Join(",",_resultelse));
-					var mm=Regex.Matches(condition,"(.+?)([and ]+?[or ]+)");
-					var conds = new string[(mm.Count+1)*3];
+					var mm = Regex.Matches(condition, "(.+?)([and ]+?[or ]+)");
+					var conds = new string[(mm.Count + 1) * 3];
 					var andors = new string[mm.Count];
-					var count=0;
-					var p=0;
-					var p2=0;
+					var count = 0;
+					var p = 0;
+					var p2 = 0;
 					foreach (Match m in mm) {
 						var s1 = m.Groups[1].ToString();
-						var s1p = Regex.Match(s1,"(.+?)([~!><=]+)+(.+)");
-						var s1a=s1p.Groups[1].ToString();
-						var s1b=s1p.Groups[2].ToString();
-						var s1c=s1p.Groups[3].ToString();
+						var s1p = Regex.Match(s1, "(.+?)([~!><=]+)+(.+)");
+						var s1a = s1p.Groups[1].ToString();
+						var s1b = s1p.Groups[2].ToString();
+						var s1c = s1p.Groups[3].ToString();
 						var s2 = m.Groups[2].ToString();
-						conds[p++]=s1a;
-						conds[p++]=s1b;
-						conds[p++]=s1c;
-						andors[p2++]=s2.Substring(1,1);
-						count+=s1.Length+s2.Length;
+						conds[p++] = s1a;
+						conds[p++] = s1b;
+						conds[p++] = s1c;
+						andors[p2++] = s2.Substring(1, 1);
+						count += s1.Length + s2.Length;
 					}
-					var s1p2 = Regex.Match(condition.Substring(count,condition.Length-count-1),"(.+?)([~!><=]+)+(.+)");
-					var s1a2=s1p2.Groups[1].ToString();
-					var s1b2=s1p2.Groups[2].ToString();
-					var s1c2=s1p2.Groups[3].ToString();
+					var s1p2 = Regex.Match(condition.Substring(count, condition.Length - count - 1), "(.+?)([~!><=]+)+(.+)");
+					var s1a2 = s1p2.Groups[1].ToString();
+					var s1b2 = s1p2.Groups[2].ToString();
+					var s1c2 = s1p2.Groups[3].ToString();
 					//Console.WriteLine(s1a2+"|"+s1b2+"|"+s1c2);
-					conds[p++]=s1a2;
-					conds[p++]=s1b2;
-					conds[p++]=s1c2;
-					_compiledlines.Add(new CMD("LOGIC", new object[]{conds,andors,_funcif,_resultif,_funcelse,_resultelse}));
+					conds[p++] = s1a2;
+					conds[p++] = s1b2;
+					conds[p++] = s1c2;
+					_compiledlines.Add(new CMD("LOGIC", new object[] {
+						conds,
+						andors,
+						_funcif,
+						_resultif,
+						_funcelse,
+						_resultelse
+					}));
 				} else if (label.ToString() != "") {
 					_labels[label.Groups[1].ToString()] = i;
 					_compiledlines.Add(new CMD("LABEL", new object[]{ }));
@@ -483,7 +506,11 @@ namespace parseManager
 					var args = (FuncWReturn.Groups[3]).ToString();
 					var retargs = var1.Split(',');
 					var result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
-					_compiledlines.Add(new CMD("FUNC_R", new object[] { retargs, func,	result }));
+					_compiledlines.Add(new CMD("FUNC_R", new object[] {
+						retargs,
+						func,
+						result
+					}));
 				} else if (FuncWOReturn.ToString() != "") {
 					var func = (FuncWOReturn.Groups[1]).ToString();
 					var args = (FuncWOReturn.Groups[2]).ToString();
@@ -512,7 +539,8 @@ namespace parseManager
 			_type = "CODEBLOCK";
 			_clean(cont);
 		}
-		public string GetName(){
+		public string GetName()
+		{
 			return _BLOCK;
 		}
 		public int GetLabel(string lab)
@@ -522,14 +550,15 @@ namespace parseManager
 		public bool TryGetLabel(string lab, out int pos)
 		{
 			int p;
-			if(_labels.TryGetValue(lab, out p)){
-				pos=p;
+			if (_labels.TryGetValue(lab, out p)) {
+				pos = p;
 				return true;
 			}
-			pos=-1;
+			pos = -1;
 			return false;
 		}
-		public void RemoveNextChunk(){
+		public void RemoveNextChunk()
+		{
 			_next = null;
 		}
 		public void SetNextChunk(chunk next)
@@ -705,23 +734,43 @@ namespace parseManager
 	 */
 	static class GLOBALS
 	{
-		static parseManager current;
-		static readonly ENV env = new ENV();
+		static standardDefine _define = new standardDefine();
+		static parseManager _current;
+		static readonly ENV _env = new ENV();
+		static List<string> _numvars = new List<string>();
 		public static object GetData(string ind)
 		{
-			return env[ind];
+			return _env[ind];
+		}
+		public static standardDefine GetDefine()
+		{
+			return _define;
 		}
 		public static void AddData(string ind, object data)
 		{
-			env[ind] = data;
+			_env[ind] = data;
 		}
 		public static void SetPM(parseManager o)
 		{
-			current = o;
+			_current = o;
 		}
 		public static parseManager GetPM()
 		{
-			return current;
+			return _current;
+		}
+		public static void Add_Var(string var)
+		{
+			if (!_numvars.Contains(var)) {
+				_numvars.Add(var);
+			}
+		}
+		public static void Remove_Var(string var)
+		{
+			_numvars.Remove(var);
+		}
+		public static string[] GetVars()
+		{
+			return _numvars.ToArray();
 		}
 	}
 }
@@ -740,20 +789,20 @@ public class standardDefine
 		var test = GLOBALS.GetPM();
 		var c = test.GetCurrentChunk();
 		int pos;
-		if(c.TryGetLabel(label, out pos)){
+		if (c.TryGetLabel(label, out pos)) {
 			c.SetPos(pos);
 			return 0;
-		} else if(test.GetFlag("forseelabels")){
+		} else if (test.GetFlag("forseelabels")) {
 			var chunks = test.GetChunks();
-			for(int i=0;i<chunks.Length;i++){
-				if(chunks[i].TryGetLabel(label, out pos)){
+			for (int i = 0; i < chunks.Length; i++) {
+				if (chunks[i].TryGetLabel(label, out pos)) {
 					test.SetBlock(chunks[i].GetName());
 					chunks[i].SetPos(pos);
 					return 0;
 				}
 			}
 		}
-		test.PushError("Unable to GOTO a non existing label: "+label+"!");
+		test.PushError("Unable to GOTO a non existing label: " + label + "!");
 		return 0;
 	}
 	public void JUMP(string block)
@@ -789,5 +838,22 @@ public class standardDefine
 	public double MOD(double a, double b)
 	{
 		return a % b;
+	}
+	public double CALC(string ex)
+	{
+		try {
+			Expression e = new Expression(ex);
+			var vars = GLOBALS.GetVars();
+			var PM = GLOBALS.GetPM();
+			var env = PM.GetENV();
+			for (int i = 0; i < vars.Length; i++) {
+				if (env[vars[i]].GetType().ToString().Contains("Double"))
+					e.Parameters[vars[i]] = (double)env[vars[i]];
+			}
+			return double.Parse(e.Evaluate().ToString());
+		} catch {
+			GLOBALS.GetPM().PushError("Invalid Expression: "+ex);
+			return double.NaN;
+		}
 	}
 }
