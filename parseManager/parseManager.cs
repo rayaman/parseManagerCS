@@ -428,7 +428,7 @@ namespace parseManager
 			tCont = Regex.Replace(tCont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
 			_lines = tCont.Split(new [] { "\r\n", "\n" }, StringSplitOptions.None);
-			compile(); // compiles the code into something that can be used quickly
+			compile();
 		}
 		void compile()
 		{
@@ -436,10 +436,13 @@ namespace parseManager
 			for (int i = 0; i < _lines.Length - 1; i++) {
 				temp = _lines[i];
 				var pureLine = Regex.Match(temp, "^\"(.+)\"");
+				var FuncTest = Regex.Match(temp, @"([a-zA-Z0-9_]+)\s?\((.*)\)");
 				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)=([a-zA-Z\\|&\\^\\+\\-\\*/%0-9_\",\\[\\]]+)");
-				if (assignment.ToString() != "") { // TODO fix mess! or write own number calculator
+				if (assignment.ToString() != "" && FuncTest.ToString()=="") { // TODO fix mess! or write own number calculator
 					var expression = new Expression(assignment.Groups[2].Value);
-					if (!expression.HasErrors()) {
+					var extest = assignment.Groups[2].Value;
+					var res = Regex.Match(extest,@"[\+\-\*/%\^]");
+					if (!expression.HasErrors() && res.ToString()!="") {
 						temp=assignment.Groups[1].Value+"=CALC(\""+assignment.Groups[2]+"\")";
 					}
 				}
@@ -457,11 +460,9 @@ namespace parseManager
 					string _funcif = (argsif.Groups[1]).ToString();
 					var _argsif = (argsif.Groups[2]).ToString();
 					string[] _resultif = Regex.Split(_argsif, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
-					//Console.WriteLine(string.Join(",",_resultif));
 					string _funcelse = (argselse.Groups[1]).ToString();
 					var _argselse = (argselse.Groups[2]).ToString();
 					string[] _resultelse = Regex.Split(_argselse, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
-					//Console.WriteLine(string.Join(",",_resultelse));
 					var mm = Regex.Matches(condition, "(.+?)([and ]+?[or ]+)");
 					var conds = new string[(mm.Count + 1) * 3];
 					var andors = new string[mm.Count];
@@ -485,7 +486,6 @@ namespace parseManager
 					var s1a2 = s1p2.Groups[1].ToString();
 					var s1b2 = s1p2.Groups[2].ToString();
 					var s1c2 = s1p2.Groups[3].ToString();
-					//Console.WriteLine(s1a2+"|"+s1b2+"|"+s1c2);
 					conds[p++] = s1a2;
 					conds[p++] = s1b2;
 					conds[p++] = s1c2;
