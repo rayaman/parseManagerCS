@@ -37,14 +37,14 @@ ENABLE leaking
 	food="Hi"
 	SetENV(env)
 	food="Hello"
-	"$food$"
+	"IN_HERE $food$"
 	env=GetDefualtENV()
 	SetENV(env)
-	"$food$"
-	--test=CallMe("This","is a test!")
+	"OUT_HERE $food$"
+	test=CallMe("This","is a test!")
 	"$test$"
 	"Did it work!"
-	--QUIT()
+	QUIT()
 }
 [CallMe:function(args1,args2)]{
 	"function was called!"

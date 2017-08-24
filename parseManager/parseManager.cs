@@ -253,7 +253,7 @@ namespace parseManager
 		public void PushError(string err)
 		{
 			Console.WriteLine(err);
-			Deactivate();
+			def.EXIT();
 		}
 		public nextType Next(string BLOCK)
 		{
@@ -375,15 +375,12 @@ namespace parseManager
 				var args = (string[])stuff[2];
 				object data;
 				var env = GetENV();
-				Console.WriteLine("CALLING: " + func);
 				if (args.Length == 1 && args[0] == "") { // assume no args inserted!
 					data = InvokeR(func, new object[]{ });
 				} else {
 					data = InvokeR(func, ResolveVar(args));
 				}
-				Console.WriteLine("RETURN: "+retargs[0]+"|"+data);
 				env[retargs[0]] = data;
-				Console.WriteLine(env);
 				GLOBALS.Add_Var(retargs[0]);
 				tempReturn.SetCMDType("method");
 				tempReturn.SetText("INVOKED METHOD: " + func);
@@ -508,7 +505,6 @@ namespace parseManager
 		public bool isVar(string val, out object v)
 		{
 			object va;
-			Console.WriteLine(val);
 			if (_defualtENV.TryGetValue(val, out va)) {
 				v = va;
 				return true;
