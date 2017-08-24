@@ -8,12 +8,11 @@
  */
 using System;
 using parseManager; // IMPORTANT
-using NCalc;
 public class define : standardDefine // If you want the standard methods you must include this, Also this class cannot be static!
 {
-	public void testM(object arg1)
+	public void testM(object arg1,object arg2)
 	{
-		Console.WriteLine(arg1);
+		Console.WriteLine(arg1+"\t"+arg2);
 	}
 	public void testM2(string arg1)
 	{
@@ -43,11 +42,7 @@ namespace parseManager
 	{
 		public static void Main(string[] args)
 		{
-			
-			parseManager test = new parseManager("parsetest2.txt"); // define is where your methods will be held
-			var env = test.GetENV();
-			env["test"]="TEST!";
-			env["test2"]=12345;
+			parseManager test = new parseManager("parsetest2.txt","define"); // define is where your methods will be held
 			nextType next = test.Next(); // TODO implement the next method
 			string type;
 			while(next.GetCMDType()!="EOF"){

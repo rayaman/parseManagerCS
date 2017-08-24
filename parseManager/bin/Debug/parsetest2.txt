@@ -7,6 +7,8 @@ ENABLE leaking
 	"Test 1:"
 	t=15
 	test=2*100
+	test2=[1,2,3,4,"HI"]
+	"test2 = $test2$"
 	"test = $test$"
 	c=5
 	::HERE::
@@ -19,12 +21,13 @@ ENABLE leaking
 	"test = $test$"
 	"stop = $stop$"
 	"Test 2:"
+	testM(2+2,"Test")
 	count=0
 	::loop::
 		if count>10 then GOTO("end")|GOTO("continue")
 		::continue::
 		"Count = $count$"
-		count=ADD(count,1)
+		count=count+1
 		if count>10 then GOTO("end")|GOTO("loop")
 	::end::
 	"Done!"

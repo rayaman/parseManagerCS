@@ -12,7 +12,6 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Reflection;
 using parseManager;
-using NCalc;
 namespace parseManager
 {
 	/// <summary>
@@ -320,7 +319,8 @@ namespace parseManager
 				tempReturn.SetText("INVOKED METHOD: " + func);
 			} else if (type == "LINE") {
 				tempReturn.SetCMDType("line");
-				tempReturn.SetText(parseHeader((string)stuff[0]));
+				var test=parseHeader((string)stuff[0]);
+				tempReturn.SetText(test.Substring(1,test.Length-2));
 			} else if (type == "FUNC_R") {
 				var retargs = (string[])stuff[0];
 				var func = (string)stuff[1];
@@ -374,9 +374,23 @@ namespace parseManager
 			object val;
 			double num;
 			bool boo;
+			double ex;
 			for (int i = 0; i < len; i++) {
-				if (isVar(v[i], out val)) {
+				if (!v[i].StartsWith("["))
+					ex = evaluater.Evaluate(v[i]);
+				else
+					ex = double.NaN;
+				if (v[i].StartsWith("[")) {
+					var result = GLOBALS.Split(v[i].Substring(1, v[i].Length - 2)); // TODO make ENV
+					var res = ResolveVar(result);
+					var env = new ENV();
+					for (int g = 0; g < res.Length; g++) {
+						env[g] = res[g];
+					}
+					args[i] = env;
+				} else if (isVar(v[i], out val)) {
 					args[i] = val;
+					debug("RETREVING SAVED VAL");
 				} else if (double.TryParse(v[i], out num)) {
 					args[i] = num;
 					debug("NUMBER: " + num);
@@ -386,6 +400,8 @@ namespace parseManager
 				} else if (bool.TryParse(v[i], out boo)) {
 					args[i] = boo;
 					debug("BOOL: " + boo);
+				} else if (!double.IsNaN(ex)) {
+					args[i] = ex;
 				} else {
 					args[i] = null;
 				}
@@ -438,14 +454,6 @@ namespace parseManager
 				var pureLine = Regex.Match(temp, "^\"(.+)\"");
 				var FuncTest = Regex.Match(temp, @"([a-zA-Z0-9_]+)\s?\((.*)\)");
 				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)=([a-zA-Z\\|&\\^\\+\\-\\*/%0-9_\",\\[\\]]+)");
-				if (assignment.ToString() != "" && FuncTest.ToString()=="") { // TODO fix mess! or write own number calculator
-					var expression = new Expression(assignment.Groups[2].Value);
-					var extest = assignment.Groups[2].Value;
-					var res = Regex.Match(extest,@"[\+\-\*/%\^]");
-					if (!expression.HasErrors() && res.ToString()!="") {
-						temp=assignment.Groups[1].Value+"=CALC(\""+assignment.Groups[2]+"\")";
-					}
-				}
 				var FuncWReturn = Regex.Match(temp, "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.*)\\)");
 				var FuncWOReturn = Regex.Match(temp, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
 				var label = Regex.Match(temp, "::(.*)::");
@@ -459,10 +467,10 @@ namespace parseManager
 					var argselse = Regex.Match(tempelse, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
 					string _funcif = (argsif.Groups[1]).ToString();
 					var _argsif = (argsif.Groups[2]).ToString();
-					string[] _resultif = Regex.Split(_argsif, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					string[] _resultif = Regex.Split(_argsif, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
 					string _funcelse = (argselse.Groups[1]).ToString();
 					var _argselse = (argselse.Groups[2]).ToString();
-					string[] _resultelse = Regex.Split(_argselse, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					string[] _resultelse = Regex.Split(_argselse, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
 					var mm = Regex.Matches(condition, "(.+?)([and ]+?[or ]+)");
 					var conds = new string[(mm.Count + 1) * 3];
 					var andors = new string[mm.Count];
@@ -505,7 +513,7 @@ namespace parseManager
 					var func = (FuncWReturn.Groups[2]).ToString();
 					var args = (FuncWReturn.Groups[3]).ToString();
 					var retargs = var1.Split(',');
-					var result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					var result = Regex.Split(args, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
 					_compiledlines.Add(new CMD("FUNC_R", new object[] {
 						retargs,
 						func,
@@ -514,13 +522,15 @@ namespace parseManager
 				} else if (FuncWOReturn.ToString() != "") {
 					var func = (FuncWOReturn.Groups[1]).ToString();
 					var args = (FuncWOReturn.Groups[2]).ToString();
-					var result = Regex.Split(args, ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					var result = Regex.Split(args, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
 					_compiledlines.Add(new CMD("FUNC", new object[]{ func, result }));
 				} else if (pureLine.ToString() != "") {
 					_compiledlines.Add(new CMD("LINE", new object[]{ pureLine.ToString() }));
 				} else if (assignment.ToString() != "") {
 					var vars = Regex.Split(assignment.Groups[1].ToString(), ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
-					var vals = Regex.Split(assignment.Groups[2].ToString(), ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					var tabTest = assignment.Groups[2].ToString();
+					string[] vals = GLOBALS.Split(tabTest);
+					//vals = Regex.Split(assignment.Groups[2].ToString(), ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
 					_compiledlines.Add(new CMD("ASSIGN", new object[]{ vars, vals }));
 				} else {
 					_compiledlines.Add(new CMD("UNKNOWN", new object[]{ }));
@@ -613,15 +623,127 @@ namespace parseManager
 			return _type;
 		}
 	}
+	public static class evaluater
+	{
+		static double helper(ENV env, parseManager PM, string o, object _v, object _r)
+		{
+			double v = 0;
+			double r = 0;
+			if (_v.GetType().ToString() == "System.String") {
+				object temp;
+				if (env.TryGetValue((string)_v, out temp)) {
+					v = (double)temp;
+				} else if (double.TryParse((string)_v, out v)) {
+					// We good!
+				} else {
+					PM.PushError("Attempt to do arithmetic on a null value: " + _v);
+				}
+			} else {
+				v = (double)_v;
+			}
+			if (_r.GetType().ToString() == "System.String") {
+				object temp;
+				if (env.TryGetValue((string)_r, out temp)) {
+					r = (double)temp;
+				} else if (double.TryParse((string)_r, out r)) {
+					// We good!
+				} else {
+					PM.PushError("Attempt to do arithmetic on a null value: " + _r);
+				}
+			} else {
+				v = (double)_v;
+			}
+			// Constructs?
+			if (o == "+") {
+				return r + v;
+			} else if (o == "-") {
+				return r - v;
+			} else if (o == "/") {
+				return r / v;
+			} else if (o == "*") {
+				return r * v;
+			} else if (o == "^") {
+				return Math.Pow(r, v);
+			} else if (o == "%") {
+				return r % v;
+			}
+			return 0;
+		}
+		public static double Evaluate(string cmd)
+		{
+			return Evaluate(cmd, 0);
+		}
+		public static double Evaluate(string cmd, double v)
+		{
+			double test;
+			if (double.TryParse(cmd, out test)) {
+				return test;
+			}
+			var loop = false;
+			if (cmd.Substring(0, 1) == "-") {
+				cmd = "0" + cmd;
+			}
+			var PM = GLOBALS.GetPM();
+			var env = PM.GetENV();
+			var count = 0;
+			var para = Regex.Match(cmd, @"(\(.+\))");
+			if (para.ToString() != "") {
+				return Evaluate(para.Groups[1].Value.Substring(1, para.Groups[1].Value.Length - 2));
+			}
+			foreach (Match m in Regex.Matches(cmd,@"(.*)([/%\+\^\-\*])(.*)")) {
+				loop = true;
+				count++;
+				var l = m.Groups[1].Value;
+				var o = m.Groups[2].Value;
+				var r = m.Groups[3].Value;
+				if (Regex.Match(l, @"([/%\+\^\-\*])").ToString() != "") {
+					v = Evaluate(l, v);
+					v = helper(env, PM, o, r, v);
+				} else if (count == 1) {
+					v = helper(env, PM, o, r, l);
+				}
+			}
+			if (!loop) {
+				object t;
+				if (env.TryGetValue(cmd, out t)) {
+					return (double)t;
+				} else {
+					t = double.NaN; // It couldn't be done :'(
+				}
+			}
+			return v; // TODO grab current ENV and does the calculation
+		}
+	}
 	public class ENV
 	{
 		ENV _Parent;
 		Dictionary<string, object> _vars = new Dictionary<string, object>();
+		Dictionary<int, object> _varsI = new Dictionary<int, object>();
 		void SetParent(ENV other)
 		{
 			_Parent = other;
 		}
+		public override string ToString()
+		{
+			string str = "";
+			foreach (KeyValuePair<string, object> entry in _vars) {
+				str+=entry.Key+" = "+entry.Value+",";
+			}
+			foreach (KeyValuePair<int, object> entry in _varsI) {
+				str+="["+entry.Key+"] = "+entry.Value+", ";
+			}
+			return str;
+		}
 		public bool TryGetValue(string ind, out object obj)
+		{
+			if (this[ind] != null) {
+				obj = this[ind];
+				return true;
+			}
+			obj = null;
+			return false;
+		}
+		public bool TryGetValue(int ind, out object obj)
 		{
 			if (this[ind] != null) {
 				obj = this[ind];
@@ -638,37 +760,26 @@ namespace parseManager
 				}
 				if (_Parent != null) {
 					return _Parent[ind];
-				} else {
-					return null;
-				}
-			}
-			set {
-				_vars[ind] = value;
-			}
-		}
-	}
-	public class PList
-	{
-		readonly Dictionary<int, object> _vars = new Dictionary<int, object>();
-		public bool TryGetValue(int ind, out object obj)
-		{
-			if (this[ind] != null) {
-				obj = this[ind];
-				return true;
-			}
-			obj = null;
-			return false;
-		}
-		public object this[int ind] {
-			get {
-				object obj;
-				if (_vars.TryGetValue(ind, out obj)) {
-					return obj;
 				}
 				return null;
 			}
 			set {
 				_vars[ind] = value;
+			}
+		}
+		public object this[int ind] {
+			get {
+				object obj;
+				if (_varsI.TryGetValue(ind, out obj)) {
+					return obj;
+				}
+				if (_Parent != null) {
+					return _Parent[ind];
+				}
+				return null;
+			}
+			set {
+				_varsI[ind] = value;
 			}
 		}
 	}
@@ -772,6 +883,53 @@ namespace parseManager
 		{
 			return _numvars.ToArray();
 		}
+		public static string[] Split(string split)
+		{
+			var res = new List<string>();
+			var state = 0;
+			var c = ".";
+			var elem = "";
+			for (int gg = 0; gg < split.Length; gg++) {
+				c = split.Substring(gg, 1);
+				if (state == 3 || state == 0) {
+					if (state == 3 && c == " ") {
+						state = 0;
+					} else {
+						state = 0;
+						if (c == "\"" || c == "'") {
+							state = 1;
+							elem += "\"";
+						} else if (c == "[") {
+							state = 1;
+							elem += "[";
+						} else if (c == ",") {
+							res.Add(elem);
+							elem = "";
+							state = 3;
+						} else {
+							elem += c;
+						}
+					}
+				} else if (state == 1) {
+					if (c == "\"" || c == "'") {
+						state = 0;
+						elem += "\"";
+					} else if (c == "]") {
+						state = 0;
+						elem += "]";
+					} else if (c == "\\") {
+						state = 2;
+					} else {
+						elem += c;
+					}
+				} else if (state == 2) {
+					elem += c;
+					state = 1;
+				}
+			}
+			res.Add(elem);
+			return res.ToArray();
+		}
 	}
 }
 public class standardDefine
@@ -841,19 +999,6 @@ public class standardDefine
 	}
 	public double CALC(string ex)
 	{
-		try {
-			Expression e = new Expression(ex);
-			var vars = GLOBALS.GetVars();
-			var PM = GLOBALS.GetPM();
-			var env = PM.GetENV();
-			for (int i = 0; i < vars.Length; i++) {
-				if (env[vars[i]].GetType().ToString().Contains("Double"))
-					e.Parameters[vars[i]] = (double)env[vars[i]];
-			}
-			return double.Parse(e.Evaluate().ToString());
-		} catch {
-			GLOBALS.GetPM().PushError("Invalid Expression: "+ex);
-			return double.NaN;
-		}
+		return evaluater.Evaluate(ex);
 	}
 }
