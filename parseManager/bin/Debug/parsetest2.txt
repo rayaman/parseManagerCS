@@ -5,33 +5,49 @@ ENABLE leaking
 }
 [START]{
 	"Test 1:"
-	t=15
-	test=2*100
-	test2=[1,2,3,4,"HI"]
-	"test2 = $test2$"
-	"test = $test$"
-	c=5
-	::HERE::
-	a,b="sdf",true
-	"a,b,c = $a$ $b$ $c$"
-	food="yum" 
-	test=true
-	stop=21
-	"food = $food$"
-	"test = $test$"
-	"stop = $stop$"
-	"Test 2:"
-	testM(2+2,"Test")
-	count=0
-	::loop::
-		if count>10 then GOTO("end")|GOTO("continue")
-		::continue::
-		"Count = $count$"
-		count=count+1
-		if count>10 then GOTO("end")|GOTO("loop")
-	::end::
-	"Done!"
-	QUIT()
+	-- t=15
+	-- test=2*100
+	-- test2=[1,2,3,4,"HI"]
+	-- test2[5]="HELLO"
+	-- "test2 = $test2$"
+	-- "test = $test$"
+	-- c=5
+	-- ::HERE::
+	-- a,b="sdf",true
+	-- "a,b,c = $a$ $b$ $c$"
+	-- food="yum" 
+	-- test=true
+	-- stop=21
+	-- "food = $food$"
+	-- "test = $test$"
+	-- "stop = $stop$"
+	-- "Test 2:"
+	-- "test2[1] = $test2[1]$"
+	-- testM(2+2,"Test")
+	-- testM(2+2,test2[5])
+	-- count=0
+	-- ::loop::
+		-- "Count = $count$"
+		-- count=count+1
+		-- if count>10 then GOTO("end")|GOTO("loop")
+	-- ::end::
+	-- "Done!"
+	--JUMP("CallMe")
+	env=CreateENV()
+	food="Hi"
+	SetENV(env)
+	food="Hello"
+	"$food$"
+	env=GetDefualtENV()
+	SetENV(env)
+	"$food$"
+	--test=CallMe("This","is a test!")
+	"$test$"
+	"Did it work!"
+	--QUIT()
 }
-
+[CallMe:function(args1,args2)]{
+	"function was called!"
+	"CALL_TEST: $args1$ $args2$"
+}
 -- (count==stop and name=="bob") ? GOTO(end) : GOTO(loop)

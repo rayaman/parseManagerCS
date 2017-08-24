@@ -1,12 +1,10 @@
 ﻿/*
- * Created by SharpDevelop.GetType
  * User: Ryan
  * Date: 8/17/2017
  * Time: 11:54 AM
- * 
- * To change this template use Tools | Options | Coding | Edit Standard Headers.
  */
 using System;
+using System.Collections;
 using System.IO;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -14,9 +12,9 @@ using System.Reflection;
 using parseManager;
 namespace parseManager
 {
-	/// <summary>
-	/// Description of ParseManager.
-	/// </summary>
+	/// The parseManager is an Advance Config Script
+	/// It allows the user to run code while also definine variables
+	/// This also has very flexible flow control meaning you can use it for chat logic and such
 	public class parseManager
 	{
 		standardDefine _invoke = new standardDefine();
@@ -25,12 +23,14 @@ namespace parseManager
 		string _define;
 		string _entry = "START";
 		Type _defineType;
+		standardDefine def = new standardDefine();
 		MethodInfo _defineMethod;
 		object _defineClassObject;
 		chunk _currentChunk;
 		chunk _lastChunk = null;
 		readonly ENV _mainENV = new ENV();
 		public ENV _defualtENV;
+		Stack<ENV> _fStack = new Stack<ENV>();
 		Dictionary<string, bool> _flags = new Dictionary<string, bool>();
 		Dictionary<string, chunk> _chunks = new Dictionary<string, chunk>();
 		Dictionary<string, string> _methods = new Dictionary<string, string>();
@@ -61,6 +61,10 @@ namespace parseManager
 			_flags.Add("forseelabels", true);
 			_flags.Add("debugging", false);
 			_flags.Add("topdown", true);
+		}
+		public ENV Pop()
+		{
+			return _fStack.Pop();
 		}
 		public bool GetFlag(string flag)
 		{
@@ -145,24 +149,64 @@ namespace parseManager
 		{
 			_active = false;
 		}
+		public bool isRegisteredFunction(string method, out chunk o)
+		{
+			if (_chunks.TryGetValue(method, out o)) {
+				return true;
+			}
+			return false;
+		}
+		public object InvokeI(string method, object[] argsV, chunk c)
+		{
+			var ccP = _currentChunk.GetPos();
+			var ccN = _currentChunk.GetName();
+			var argsN = c.GetArgs();
+			var fEnv = new ENV();
+			fEnv.SetParent(_defualtENV);
+			for (int i = 0; i < argsN.Length; i++) {
+				fEnv[argsN[i]] = argsV[i];
+			}
+			var tempEnv = new ENV();
+			tempEnv[0] = ccN;
+			tempEnv[1] = ccP;
+			tempEnv[2] = _defualtENV;
+			_fStack.Push(tempEnv);
+			if (_fStack.Count > 1024) {
+				PushError("Stack Overflow!");
+			}
+			_defualtENV = fEnv;
+			Console.WriteLine(fEnv);
+			def.JUMP(method);
+			return fEnv; // TODO Handle returns
+		}
 		public object InvokeR(string method, object[] args)
 		{
-			//try{
-			_defineMethod = _defineType.GetMethod(method);
-			return _defineMethod.Invoke(_defineClassObject, args);
-//			} catch {
-//				PushError("Invalid method: "+method);
-//				return null;
-//			}
+			chunk c;
+			if (isRegisteredFunction(method, out c)) {
+				return InvokeI(method, args, c);
+			}
+			try {
+				_defineMethod = _defineType.GetMethod(method);
+				return _defineMethod.Invoke(_defineClassObject, args);
+			} catch {
+				PushError("Invalid method: " + method);
+				return null;
+			}
 		}
 		public int InvokeNR(string method, object[] args)
 		{
-			try {
-				_defineMethod = _defineType.GetMethod(method);
-				_defineMethod.Invoke(_defineClassObject, args);
+			chunk c;
+			if (isRegisteredFunction(method, out c)) {
+				InvokeI(method, args, c);
 				return 0;
-			} catch {
-				PushError("Invalid method: " + method);
+			} else {
+				try {
+					_defineMethod = _defineType.GetMethod(method);
+					_defineMethod.Invoke(_defineClassObject, args);
+					return 0;
+				} catch {
+					PushError("Invalid method: " + method);
+				}
 			}
 			return -1;
 		}
@@ -179,6 +223,10 @@ namespace parseManager
 		public ENV GetENV()
 		{
 			return _defualtENV;
+		}
+		public ENV GetDENV()
+		{
+			return _mainENV;
 		}
 		public void SetENV()
 		{
@@ -319,20 +367,23 @@ namespace parseManager
 				tempReturn.SetText("INVOKED METHOD: " + func);
 			} else if (type == "LINE") {
 				tempReturn.SetCMDType("line");
-				var test=parseHeader((string)stuff[0]);
-				tempReturn.SetText(test.Substring(1,test.Length-2));
+				var test = parseHeader((string)stuff[0]);
+				tempReturn.SetText(test.Substring(1, test.Length - 2));
 			} else if (type == "FUNC_R") {
 				var retargs = (string[])stuff[0];
 				var func = (string)stuff[1];
 				var args = (string[])stuff[2];
 				object data;
+				var env = GetENV();
+				Console.WriteLine("CALLING: " + func);
 				if (args.Length == 1 && args[0] == "") { // assume no args inserted!
 					data = InvokeR(func, new object[]{ });
 				} else {
 					data = InvokeR(func, ResolveVar(args));
 				}
-				var env = GetENV();
+				Console.WriteLine("RETURN: "+retargs[0]+"|"+data);
 				env[retargs[0]] = data;
+				Console.WriteLine(env);
 				GLOBALS.Add_Var(retargs[0]);
 				tempReturn.SetCMDType("method");
 				tempReturn.SetText("INVOKED METHOD: " + func);
@@ -341,14 +392,40 @@ namespace parseManager
 				var vals = (string[])stuff[1];
 				var env = GetENV();
 				var types = ResolveVar(vals);
-				for (int i = 0; i < types.Length; i++) {
-					env[vars[i]] = types[i];
-					GLOBALS.Add_Var(vars[i]);
-				}
+				AssignmentHandler(vars, types);
 				tempReturn.SetCMDType("assignment");
 				tempReturn.SetText(_currentChunk.GetLine());
 			}
 			return tempReturn;
+		}
+		public void AssignmentHandler(string[] vars, object[] types)
+		{
+			var env = GetENV();
+			for (int i = 0; i < types.Length; i++) {
+				var test = vars[i];
+				if (test.EndsWith("]")) {
+					var dict = Regex.Match(test, @"(.*)\[(.+)\]");
+					var _var = dict.Groups[1].Value;
+					var _val = dict.Groups[2].Value;
+					var val = ResolveVar(new []{ _val });
+					var _e = env[_var];
+					if (!_e.GetType().ToString().Contains("ENV")) {
+						PushError("Attempted to index a object that isn't a table!");
+					} else {
+						var e = (ENV)_e;
+						if (val[0].GetType().ToString().Contains("Double")) {
+							e[int.Parse(val[0].ToString())] = types[i];
+						} else if (val[0].GetType().ToString().Contains("String")) {
+							e[(string)val[0]] = types[i];
+						} else {
+							PushError("Invalid index type: " + val[0]);
+						}
+					}
+				} else {
+					env[vars[i]] = types[i];
+					GLOBALS.Add_Var(vars[i]);
+				}
+			}
 		}
 		public string parseHeader(string header)
 		{
@@ -388,6 +465,26 @@ namespace parseManager
 						env[g] = res[g];
 					}
 					args[i] = env;
+					debug("TABLE: " + env);
+				} else if (v[i].EndsWith("]")) {
+					var dict = Regex.Match(v[i], @"(.*)\[(.+)\]");
+					var _var = dict.Groups[1].Value;
+					var _val = dict.Groups[2].Value;
+					var val2 = ResolveVar(new []{ _val });
+					var env = GetENV();
+					var _e = env[_var];
+					if (!_e.GetType().ToString().Contains("ENV")) {
+						PushError("Attempted to index a object that isn't a table!");
+					} else {
+						var e = (ENV)_e;
+						if (val2[0].GetType().ToString().Contains("Double")) {
+							args[i] = e[int.Parse(val2[0].ToString())];
+						} else if (val2[0].GetType().ToString().Contains("String")) {
+							args[i] = e[(string)val2[0]];
+						} else {
+							PushError("Invalid index type: " + val2[0]);
+						}
+					}
 				} else if (isVar(v[i], out val)) {
 					args[i] = val;
 					debug("RETREVING SAVED VAL");
@@ -395,7 +492,7 @@ namespace parseManager
 					args[i] = num;
 					debug("NUMBER: " + num);
 				} else if (v[i][0] == '"' && v[i][v[i].Length - 1] == '"') {
-					args[i] = parseHeader(v[i].Substring(1, v[i].Length - 2));
+					args[i] = parseHeader(v[i].Replace("\"", ""));
 					debug("STRING: " + args[i]);
 				} else if (bool.TryParse(v[i], out boo)) {
 					args[i] = boo;
@@ -410,9 +507,33 @@ namespace parseManager
 		}
 		public bool isVar(string val, out object v)
 		{
-			if (_defualtENV[val] != null) {
-				v = _defualtENV[val];
+			object va;
+			Console.WriteLine(val);
+			if (_defualtENV.TryGetValue(val, out va)) {
+				v = va;
 				return true;
+			}
+			if (val.EndsWith("]")) {
+				var dict = Regex.Match(val, @"(.*)\[(.+)\]");
+				var _var = dict.Groups[1].Value;
+				var _val = dict.Groups[2].Value;
+				var val2 = ResolveVar(new []{ _val });
+				var env = GetENV();
+				var _e = env[_var];
+				if (!_e.GetType().ToString().Contains("ENV")) {
+					PushError("Attempted to index a object that isn't a table!");
+				} else {
+					var e = (ENV)_e;
+					if (val2[0].GetType().ToString().Contains("Double")) {
+						v = e[int.Parse(val2[0].ToString())];
+						return true;
+					} else if (val2[0].GetType().ToString().Contains("String")) {
+						v = e[(string)val2[0]];
+						return true;
+					} else {
+						PushError("Invalid index type: " + val2[0]);
+					}
+				}
 			}
 			v = null;
 			return false;
@@ -427,10 +548,41 @@ namespace parseManager
 		string _type;
 		string _pureType;
 		string[] _lines;
+		string[] args;
+		bool isFunc;
 		Dictionary<string, int> _labels = new Dictionary<string, int>();
 		List<CMD> _compiledlines = new List<CMD>();
 		int _pos = 0;
 		chunk _next = null;
+		public string[] GetArgs()
+		{
+			return args;
+		}
+		public chunk(string name, string cont, string type)
+		{
+			_BLOCK = name;
+			_type = type;
+			if (type.Contains("function")) {
+				isFunc = true;
+				var func = Regex.Match(type, @"\((.+)\)");
+				args = GLOBALS.Split(func.Groups[1].Value);
+				_compiledlines.Add(new CMD("FUNC", new object[] {
+					"TRACEBACK",
+					new string[]{ }
+				})); // Append the traceback method to the chunk
+			}
+			_clean(cont);
+		}
+		public bool isFunction()
+		{
+			return isFunc;
+		}
+		public chunk(string name, string cont)
+		{
+			_BLOCK = name;
+			_type = "CODEBLOCK";
+			_clean(cont);
+		}
 		void _clean(string cont)
 		{
 			var m = Regex.Match(_type, @"([a-zA-Z0-9_]+)");
@@ -536,18 +688,6 @@ namespace parseManager
 					_compiledlines.Add(new CMD("UNKNOWN", new object[]{ }));
 				}
 			}
-		}
-		public chunk(string name, string cont, string type)
-		{
-			_BLOCK = name;
-			_type = type;
-			_clean(cont);
-		}
-		public chunk(string name, string cont)
-		{
-			_BLOCK = name;
-			_type = "CODEBLOCK";
-			_clean(cont);
 		}
 		public string GetName()
 		{
@@ -706,7 +846,14 @@ namespace parseManager
 			if (!loop) {
 				object t;
 				if (env.TryGetValue(cmd, out t)) {
-					return (double)t;
+					double te;
+					if (t.GetType().ToString().Contains("Double"))
+						return (double)t;
+					if(t.GetType().ToString().Contains("String"))
+						if (double.TryParse((string)t, out te)) {
+							return te;
+						}
+					return double.NaN;
 				} else {
 					t = double.NaN; // It couldn't be done :'(
 				}
@@ -719,20 +866,20 @@ namespace parseManager
 		ENV _Parent;
 		Dictionary<string, object> _vars = new Dictionary<string, object>();
 		Dictionary<int, object> _varsI = new Dictionary<int, object>();
-		void SetParent(ENV other)
+		public void SetParent(ENV other)
 		{
 			_Parent = other;
 		}
 		public override string ToString()
 		{
-			string str = "";
+			string str = "(";
 			foreach (KeyValuePair<string, object> entry in _vars) {
-				str+=entry.Key+" = "+entry.Value+",";
+				str += "[\"" + entry.Key + "\"] = " + entry.Value + ", ";
 			}
 			foreach (KeyValuePair<int, object> entry in _varsI) {
-				str+="["+entry.Key+"] = "+entry.Value+", ";
+				str += "[" + entry.Key + "] = " + entry.Value + ", ";
 			}
-			return str;
+			return str + ")";
 		}
 		public bool TryGetValue(string ind, out object obj)
 		{
@@ -934,6 +1081,15 @@ namespace parseManager
 }
 public class standardDefine
 {
+	public void TRACEBACK()
+	{
+		var test = GLOBALS.GetPM();
+		ENV env = test.Pop();
+		test.SetBlock((string)env[0]);
+		var c = test.GetCurrentChunk();
+		c.SetPos((int)env[1]);
+		SetENV((ENV)env[3]);
+	}
 	public void EXIT()
 	{
 		GLOBALS.GetPM().Deactivate();
@@ -941,6 +1097,25 @@ public class standardDefine
 	public void QUIT()
 	{
 		Environment.Exit(0);
+	}
+	public void SetENV(ENV env)
+	{
+		var test = GLOBALS.GetPM();
+		test.SetENV(env);
+	}
+	public ENV GetENV()
+	{
+		var test = GLOBALS.GetPM();
+		return test.GetENV();
+	}
+	public ENV GetDefualtENV()
+	{
+		var test = GLOBALS.GetPM();
+		return test.GetDENV();
+	}
+	public ENV CreateENV()
+	{
+		return new ENV();
 	}
 	public int GOTO(string label)
 	{
