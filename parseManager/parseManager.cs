@@ -77,7 +77,7 @@ namespace parseManager
 		void debug(object msg)
 		{
 			if (_flags["debugging"])
-				Console.WriteLine(msg);
+				Console.WriteLine("DEBUGGING: "+msg);
 		}
 		void _Parse(string data)
 		{
@@ -175,7 +175,6 @@ namespace parseManager
 				PushError("Stack Overflow!");
 			}
 			_defualtENV = fEnv;
-			Console.WriteLine(fEnv);
 			def.JUMP(method);
 			return fEnv; // TODO Handle returns
 		}
@@ -341,6 +340,7 @@ namespace parseManager
 				}
 				tempReturn.SetCMDType("conditional");
 				tempReturn.SetText("test turned out to be: " + truth);
+				return tempReturn;
 			} else if (type == "LABEL") {
 				cCMD = _currentChunk.GetCLine();
 				if (cCMD == null) {
@@ -354,6 +354,7 @@ namespace parseManager
 				}
 				type = cCMD.GetCMDType();
 				stuff = cCMD.GetArgs();
+				return tempReturn;
 			}
 			if (type == "FUNC") {
 				var func = (string)stuff[0];
@@ -365,10 +366,12 @@ namespace parseManager
 				}
 				tempReturn.SetCMDType("method");
 				tempReturn.SetText("INVOKED METHOD: " + func);
+				return tempReturn;
 			} else if (type == "LINE") {
 				tempReturn.SetCMDType("line");
 				var test = parseHeader((string)stuff[0]);
 				tempReturn.SetText(test.Substring(1, test.Length - 2));
+				return tempReturn;
 			} else if (type == "FUNC_R") {
 				var retargs = (string[])stuff[0];
 				var func = (string)stuff[1];
@@ -384,6 +387,7 @@ namespace parseManager
 				GLOBALS.Add_Var(retargs[0]);
 				tempReturn.SetCMDType("method");
 				tempReturn.SetText("INVOKED METHOD: " + func);
+				return tempReturn;
 			} else if (type == "ASSIGN") { // TODO add lists/dictonaries support
 				var vars = (string[])stuff[0];
 				var vals = (string[])stuff[1];
@@ -392,8 +396,8 @@ namespace parseManager
 				AssignmentHandler(vars, types);
 				tempReturn.SetCMDType("assignment");
 				tempReturn.SetText(_currentChunk.GetLine());
+				return tempReturn;
 			}
-			return tempReturn;
 		}
 		public void AssignmentHandler(string[] vars, object[] types)
 		{
@@ -505,6 +509,10 @@ namespace parseManager
 		public bool isVar(string val, out object v)
 		{
 			object va;
+			debug("TESTING: "+val);
+			if(_defualtENV==null){
+				_defualtENV=_mainENV;
+			}
 			if (_defualtENV.TryGetValue(val, out va)) {
 				v = va;
 				return true;

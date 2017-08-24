@@ -34,15 +34,15 @@ ENABLE leaking
 	-- "Done!"
 	--JUMP("CallMe")
 	env=CreateENV()
-	food="Hi"
+	msg="Hi"
 	SetENV(env)
-	food="Hello"
-	"IN_HERE $food$"
+	msg="Hello"
+	"IN_HERE $msg$"
 	env=GetDefualtENV()
 	SetENV(env)
-	"OUT_HERE $food$"
+	"OUT_HERE $msg$"
 	test=CallMe("This","is a test!")
-	"$test$"
+	"FENV: $test$"
 	"Did it work!"
 	QUIT()
 }
