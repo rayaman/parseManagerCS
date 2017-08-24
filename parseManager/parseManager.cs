@@ -77,7 +77,7 @@ namespace parseManager
 		void debug(object msg)
 		{
 			if (_flags["debugging"])
-				Console.WriteLine("DEBUGGING: "+msg);
+				Console.WriteLine("DEBUGGING: " + msg);
 		}
 		void _Parse(string data)
 		{
@@ -113,6 +113,7 @@ namespace parseManager
 			try {
 				StreamReader sr = File.OpenText(_filepath);
 				_Parse(sr.ReadToEnd());
+				sr.Close();
 			} catch (FileNotFoundException) {
 				Console.WriteLine("File '" + _filepath + "' does not exist! Loading failled!");
 			}
@@ -122,6 +123,7 @@ namespace parseManager
 			try {
 				StreamReader sr = File.OpenText(filename);
 				_Parse(sr.ReadToEnd());
+				sr.Close();
 			} catch (FileNotFoundException) {
 				Console.WriteLine("Load '" + filename + "' File not found. Loading failled!");
 			}
@@ -317,8 +319,10 @@ namespace parseManager
 				}
 				var truth = truths[0];
 				if (truths.Length == 1 && truth) {
+					//Console.WriteLine(funcif+"|"+ResolveVar(argsif)[0]);
 					InvokeNR(funcif, ResolveVar(argsif));
 				} else if (truths.Length == 1) {
+					//Console.WriteLine(funcelse + "|"+ResolveVar(argselse)[0]);
 					InvokeNR(funcelse, ResolveVar(argselse));
 				} else {
 					for (int i = 1; i < andors.Length; i++) {
@@ -331,10 +335,10 @@ namespace parseManager
 						}
 					}
 					if (truth) {
-						Console.WriteLine(funcif);
+						//Console.WriteLine(funcif);
 						InvokeNR(funcif, ResolveVar(argsif));
 					} else {
-						Console.WriteLine("|" + funcelse + "|");
+						//Console.WriteLine("|" + funcelse + "|");
 						InvokeNR(funcelse, ResolveVar(argselse));
 					}
 				}
@@ -398,6 +402,7 @@ namespace parseManager
 				tempReturn.SetText(_currentChunk.GetLine());
 				return tempReturn;
 			}
+			return tempReturn;
 		}
 		public void AssignmentHandler(string[] vars, object[] types)
 		{
@@ -508,13 +513,13 @@ namespace parseManager
 		}
 		public bool isVar(string val, out object v)
 		{
-			object va;
-			debug("TESTING: "+val);
-			if(_defualtENV==null){
-				_defualtENV=_mainENV;
+			debug("TESTING: " + val);
+			if (_defualtENV == null) {
+				_defualtENV = _mainENV;
 			}
-			if (_defualtENV.TryGetValue(val, out va)) {
-				v = va;
+			debug("GETTING VAL FROM ENV: " + _defualtENV[val]);
+			if (_defualtENV[val] != null) {
+				v = _defualtENV[val];
 				return true;
 			}
 			if (val.EndsWith("]")) {
@@ -566,15 +571,6 @@ namespace parseManager
 		{
 			_BLOCK = name;
 			_type = type;
-			if (type.Contains("function")) {
-				isFunc = true;
-				var func = Regex.Match(type, @"\((.+)\)");
-				args = GLOBALS.Split(func.Groups[1].Value);
-				_compiledlines.Add(new CMD("FUNC", new object[] {
-					"TRACEBACK",
-					new string[]{ }
-				})); // Append the traceback method to the chunk
-			}
 			_clean(cont);
 		}
 		public bool isFunction()
@@ -667,9 +663,9 @@ namespace parseManager
 				} else if (FuncWReturn.ToString() != "") {
 					var var1 = (FuncWReturn.Groups[1]).ToString();
 					var func = (FuncWReturn.Groups[2]).ToString();
-					var args = (FuncWReturn.Groups[3]).ToString();
+					var args2 = (FuncWReturn.Groups[3]).ToString();
 					var retargs = var1.Split(',');
-					var result = Regex.Split(args, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
+					var result = Regex.Split(args2, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
 					_compiledlines.Add(new CMD("FUNC_R", new object[] {
 						retargs,
 						func,
@@ -677,8 +673,8 @@ namespace parseManager
 					}));
 				} else if (FuncWOReturn.ToString() != "") {
 					var func = (FuncWOReturn.Groups[1]).ToString();
-					var args = (FuncWOReturn.Groups[2]).ToString();
-					var result = Regex.Split(args, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
+					var args2 = (FuncWOReturn.Groups[2]).ToString();
+					var result = Regex.Split(args2, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
 					_compiledlines.Add(new CMD("FUNC", new object[]{ func, result }));
 				} else if (pureLine.ToString() != "") {
 					_compiledlines.Add(new CMD("LINE", new object[]{ pureLine.ToString() }));
@@ -691,6 +687,15 @@ namespace parseManager
 				} else {
 					_compiledlines.Add(new CMD("UNKNOWN", new object[]{ }));
 				}
+			}
+			if (_type.Contains("function")) {
+				isFunc = true;
+				var func = Regex.Match(_type, @"\((.+)\)");
+				args = GLOBALS.Split(func.Groups[1].Value);
+				_compiledlines.Add(new CMD("FUNC", new object[] {
+					"TRACEBACK",
+					new string[]{}
+				})); // Append the traceback method to the chunk
 			}
 		}
 		public string GetName()
@@ -849,14 +854,15 @@ namespace parseManager
 			}
 			if (!loop) {
 				object t;
+				if (env != null)
 				if (env.TryGetValue(cmd, out t)) {
 					double te;
 					if (t.GetType().ToString().Contains("Double"))
 						return (double)t;
-					if(t.GetType().ToString().Contains("String"))
-						if (double.TryParse((string)t, out te)) {
-							return te;
-						}
+					if (t.GetType().ToString().Contains("String"))
+					if (double.TryParse((string)t, out te)) {
+						return te;
+					}
 					return double.NaN;
 				} else {
 					t = double.NaN; // It couldn't be done :'(
@@ -878,7 +884,11 @@ namespace parseManager
 		{
 			string str = "(";
 			foreach (KeyValuePair<string, object> entry in _vars) {
-				str += "[\"" + entry.Key + "\"] = " + entry.Value + ", ";
+				var val = entry.Value;
+				if (val.GetType().ToString().Contains("ENV")) {
+					val = "ENV";
+				}
+				str += "[\"" + entry.Key + "\"] = " + val + ", ";
 			}
 			foreach (KeyValuePair<int, object> entry in _varsI) {
 				str += "[" + entry.Key + "] = " + entry.Value + ", ";
@@ -1119,7 +1129,10 @@ public class standardDefine
 	}
 	public ENV CreateENV()
 	{
-		return new ENV();
+		var temp = new ENV();
+		var PM = GLOBALS.GetPM();
+		temp.SetParent(PM.GetENV());
+		return temp;
 	}
 	public int GOTO(string label)
 	{

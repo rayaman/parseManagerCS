@@ -1,4 +1,3 @@
-ENABLE leaking
 [TEST]{
 	"Jump was successful!"
 	--GOTO("HERE")
@@ -36,7 +35,8 @@ ENABLE leaking
 	env=CreateENV()
 	msg="Hi"
 	SetENV(env)
-	msg="Hello"
+	"BEFORE_CHANGE: $msg$"
+	msg=21+7
 	"IN_HERE $msg$"
 	env=GetDefualtENV()
 	SetENV(env)
@@ -44,7 +44,10 @@ ENABLE leaking
 	test=CallMe("This","is a test!")
 	"FENV: $test$"
 	"Did it work!"
-	QUIT()
+	"HMMM"
+	test=CallMe("This","is a test too!")
+	"FENV: $test$"
+	EXIT()
 }
 [CallMe:function(args1,args2)]{
 	"function was called!"
