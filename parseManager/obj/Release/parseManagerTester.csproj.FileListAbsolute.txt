@@ -1,0 +1,6 @@
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Release\parseManagerTester.exe.config
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Release\parseManagerTester.exe
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Release\CSCore.dll
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Release\CSCore.xml
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Release\parseManagerTester.csprojResolveAssemblyReference.cache
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Release\parseManagerTester.exe

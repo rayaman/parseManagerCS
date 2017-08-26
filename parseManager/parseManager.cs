@@ -4,13 +4,13 @@
  * Time: 11:54 AM
  */
 using System;
-using System.Collections;
 using System.IO;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Reflection;
-using parseManager;
-namespace parseManager
+using parseManagerCS;
+using System.Threading;
+namespace parseManagerCS
 {
 	/// The parseManager is an Advance Config Script
 	/// It allows the user to run code while also definine variables
@@ -28,12 +28,16 @@ namespace parseManager
 		object _defineClassObject;
 		chunk _currentChunk;
 		chunk _lastChunk = null;
-		readonly ENV _mainENV = new ENV();
+		ENV _mainENV = new ENV();
 		public ENV _defualtENV;
 		Stack<ENV> _fStack = new Stack<ENV>();
 		Dictionary<string, bool> _flags = new Dictionary<string, bool>();
 		Dictionary<string, chunk> _chunks = new Dictionary<string, chunk>();
 		Dictionary<string, string> _methods = new Dictionary<string, string>();
+		public void _SetDENV(ENV env)
+		{
+			_mainENV = env;
+		}
 		public parseManager(string filepath)
 		{
 			InitFlags();
@@ -74,7 +78,7 @@ namespace parseManager
 			}
 			return false;
 		}
-		void debug(object msg)
+		public void debug(object msg)
 		{
 			if (_flags["debugging"])
 				Console.WriteLine("DEBUGGING: " + msg);
@@ -90,6 +94,9 @@ namespace parseManager
 			foreach (Match m in Regex.Matches(data, @"ENTRY ([a-zA-Z0-9_\./]+)")) {
 				_entry = m.Groups[1].ToString();
 			}
+//			foreach (Match m in Regex.Matches(data, @"USING ([a-zA-Z0-9_\./]+)")) {
+//				m.Groups[1].ToString();
+//			}
 			var match = Regex.Matches(data, @"\[(.+)\][\r\n]*?\{([^\0]+?)\}");
 			var count = 0;
 			foreach (Match m in match) {
@@ -154,7 +161,10 @@ namespace parseManager
 		public bool isRegisteredFunction(string method, out chunk o)
 		{
 			if (_chunks.TryGetValue(method, out o)) {
-				return true;
+				if (o.isFunction()) {
+					return true;
+				}
+				return false;
 			}
 			return false;
 		}
@@ -177,7 +187,7 @@ namespace parseManager
 				PushError("Stack Overflow!");
 			}
 			_defualtENV = fEnv;
-			def.JUMP(method);
+			def.JUMP(this,method);
 			return fEnv; // TODO Handle returns
 		}
 		public object InvokeR(string method, object[] args)
@@ -188,7 +198,7 @@ namespace parseManager
 			}
 			try {
 				_defineMethod = _defineType.GetMethod(method);
-				return _defineMethod.Invoke(_defineClassObject, args);
+				return _defineMethod.Invoke(_defineClassObject, tackBArgs(this, args));
 			} catch {
 				PushError("Invalid method: " + method);
 				return null;
@@ -200,16 +210,24 @@ namespace parseManager
 			if (isRegisteredFunction(method, out c)) {
 				InvokeI(method, args, c);
 				return 0;
-			} else {
-				try {
-					_defineMethod = _defineType.GetMethod(method);
-					_defineMethod.Invoke(_defineClassObject, args);
-					return 0;
-				} catch {
-					PushError("Invalid method: " + method);
-				}
+			}
+			try {
+				_defineMethod = _defineType.GetMethod(method);
+				_defineMethod.Invoke(_defineClassObject, tackBArgs(this, args));
+				return 0;
+			} catch {
+				PushError("Invalid method: " + method);
 			}
 			return -1;
+		}
+		public object[] tackBArgs(object o,object[] args){
+			var len = args.Length;
+			var newargs=new object[len+1];
+			for(int i = 0;i<len;i++){
+				newargs[i+1]=args[i];
+			}
+			newargs[0]=o;
+			return newargs;
 		}
 		public void SetBlock(string BLOCK)
 		{
@@ -253,8 +271,9 @@ namespace parseManager
 		}
 		public void PushError(string err)
 		{
-			Console.WriteLine(err);
-			def.EXIT();
+			Console.WriteLine(err + "\nPress Enter!");
+			Console.ReadLine();
+			def.EXIT(this);
 		}
 		public nextType Next(string BLOCK)
 		{
@@ -280,6 +299,11 @@ namespace parseManager
 						return Next();
 					}
 				}
+				tempReturn.SetCMDType("EOF");
+				tempReturn.SetText("Reached the end of the file!");
+				return tempReturn;
+			}
+			if (!_active) {
 				tempReturn.SetCMDType("EOF");
 				tempReturn.SetText("Reached the end of the file!");
 				return tempReturn;
@@ -319,10 +343,8 @@ namespace parseManager
 				}
 				var truth = truths[0];
 				if (truths.Length == 1 && truth) {
-					//Console.WriteLine(funcif+"|"+ResolveVar(argsif)[0]);
 					InvokeNR(funcif, ResolveVar(argsif));
 				} else if (truths.Length == 1) {
-					//Console.WriteLine(funcelse + "|"+ResolveVar(argselse)[0]);
 					InvokeNR(funcelse, ResolveVar(argselse));
 				} else {
 					for (int i = 1; i < andors.Length; i++) {
@@ -335,10 +357,8 @@ namespace parseManager
 						}
 					}
 					if (truth) {
-						//Console.WriteLine(funcif);
 						InvokeNR(funcif, ResolveVar(argsif));
 					} else {
-						//Console.WriteLine("|" + funcelse + "|");
 						InvokeNR(funcelse, ResolveVar(argselse));
 					}
 				}
@@ -346,18 +366,8 @@ namespace parseManager
 				tempReturn.SetText("test turned out to be: " + truth);
 				return tempReturn;
 			} else if (type == "LABEL") {
-				cCMD = _currentChunk.GetCLine();
-				if (cCMD == null) {
-					if (_flags["leaking"] && _active) {
-						SetBlock(_currentChunk.GetNextChunk());
-						return Next();
-					}
-					tempReturn.SetCMDType("EOF");
-					tempReturn.SetText("Reached the end of the file!");
-					return tempReturn;
-				}
-				type = cCMD.GetCMDType();
-				stuff = cCMD.GetArgs();
+				tempReturn.SetCMDType("label");
+				tempReturn.SetText("Jumped to a label!");
 				return tempReturn;
 			}
 			if (type == "FUNC") {
@@ -463,6 +473,13 @@ namespace parseManager
 					ex = evaluater.Evaluate(v[i]);
 				else
 					ex = double.NaN;
+				if (v[i].Length == 0 && len == 1) {
+					return new object[]{ };
+				}
+				if (v[i] == "[]") {
+					args[i] = new ENV();
+					continue;
+				}
 				if (v[i].StartsWith("[")) {
 					var result = GLOBALS.Split(v[i].Substring(1, v[i].Length - 2)); // TODO make ENV
 					var res = ResolveVar(result);
@@ -619,10 +636,10 @@ namespace parseManager
 					var argselse = Regex.Match(tempelse, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
 					string _funcif = (argsif.Groups[1]).ToString();
 					var _argsif = (argsif.Groups[2]).ToString();
-					string[] _resultif = Regex.Split(_argsif, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
+					string[] _resultif = GLOBALS.Split(_argsif);
 					string _funcelse = (argselse.Groups[1]).ToString();
 					var _argselse = (argselse.Groups[2]).ToString();
-					string[] _resultelse = Regex.Split(_argselse, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
+					string[] _resultelse = GLOBALS.Split(_argselse);
 					var mm = Regex.Matches(condition, "(.+?)([and ]+?[or ]+)");
 					var conds = new string[(mm.Count + 1) * 3];
 					var andors = new string[mm.Count];
@@ -664,8 +681,8 @@ namespace parseManager
 					var var1 = (FuncWReturn.Groups[1]).ToString();
 					var func = (FuncWReturn.Groups[2]).ToString();
 					var args2 = (FuncWReturn.Groups[3]).ToString();
-					var retargs = var1.Split(',');
-					var result = Regex.Split(args2, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
+					var retargs = GLOBALS.Split(var1);
+					var result = GLOBALS.Split(args2);
 					_compiledlines.Add(new CMD("FUNC_R", new object[] {
 						retargs,
 						func,
@@ -674,12 +691,12 @@ namespace parseManager
 				} else if (FuncWOReturn.ToString() != "") {
 					var func = (FuncWOReturn.Groups[1]).ToString();
 					var args2 = (FuncWOReturn.Groups[2]).ToString();
-					var result = Regex.Split(args2, ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
+					var result = GLOBALS.Split(args2);
 					_compiledlines.Add(new CMD("FUNC", new object[]{ func, result }));
 				} else if (pureLine.ToString() != "") {
 					_compiledlines.Add(new CMD("LINE", new object[]{ pureLine.ToString() }));
 				} else if (assignment.ToString() != "") {
-					var vars = Regex.Split(assignment.Groups[1].ToString(), ",(?=(?:[^\"']*[\"'][^\"']*[\"'])*[^\"']*$)");
+					var vars = GLOBALS.Split(assignment.Groups[1].ToString());
 					var tabTest = assignment.Groups[2].ToString();
 					string[] vals = GLOBALS.Split(tabTest);
 					//vals = Regex.Split(assignment.Groups[2].ToString(), ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
@@ -694,7 +711,7 @@ namespace parseManager
 				args = GLOBALS.Split(func.Groups[1].Value);
 				_compiledlines.Add(new CMD("FUNC", new object[] {
 					"TRACEBACK",
-					new string[]{}
+					new string[]{ }
 				})); // Append the traceback method to the chunk
 			}
 		}
@@ -825,6 +842,9 @@ namespace parseManager
 		public static double Evaluate(string cmd, double v)
 		{
 			double test;
+			if (cmd.Length == 0) {
+				return double.NaN;
+			}
 			if (double.TryParse(cmd, out test)) {
 				return test;
 			}
@@ -871,6 +891,7 @@ namespace parseManager
 			return v; // TODO grab current ENV and does the calculation
 		}
 	}
+	[Serializable]
 	public class ENV
 	{
 		ENV _Parent;
@@ -879,6 +900,16 @@ namespace parseManager
 		public void SetParent(ENV other)
 		{
 			_Parent = other;
+		}
+		public object[] GetList()
+		{
+			var temp = new object[_varsI.Count];
+			var count = 0;
+			foreach (KeyValuePair<int, object> entry in _varsI) {
+				temp[count] = entry.Value;
+				count++;
+			}
+			return temp;
 		}
 		public override string ToString()
 		{
@@ -1010,6 +1041,20 @@ namespace parseManager
 		static parseManager _current;
 		static readonly ENV _env = new ENV();
 		static List<string> _numvars = new List<string>();
+		public static void WriteToBinaryFile(string filePath, ENV objectToWrite, bool append = false)
+		{
+			using (Stream stream = File.Open(filePath, append ? FileMode.Append : FileMode.Create)) {
+				var binaryFormatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+				binaryFormatter.Serialize(stream, objectToWrite);
+			}
+		}
+		public static ENV ReadFromBinaryFile(string filePath)
+		{
+			using (Stream stream = File.Open(filePath, FileMode.Open)) {
+				var binaryFormatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+				return (ENV)binaryFormatter.Deserialize(stream);
+			}
+		}
 		public static object GetData(string ind)
 		{
 			return _env[ind];
@@ -1095,102 +1140,156 @@ namespace parseManager
 }
 public class standardDefine
 {
-	public void TRACEBACK()
+	public void SAVE(parseManager PM)
 	{
-		var test = GLOBALS.GetPM();
-		ENV env = test.Pop();
-		test.SetBlock((string)env[0]);
-		var c = test.GetCurrentChunk();
+		var env = PM.GetDENV();
+		var c = PM.GetCurrentChunk();
+		env["__CurrentChunkName"] = c.GetName();
+		env["__CurrentChunkPos"] = c.GetPos();
+		env["__DefualtENV"] = PM.GetENV();
+		GLOBALS.WriteToBinaryFile("savedata.dat", env);
+	}
+	public bool LOAD(parseManager PM)
+	{
+		try {
+			ENV env = GLOBALS.ReadFromBinaryFile("savedata.dat");
+			var name = (string)env["__CurrentChunkName"];
+			var pos = (int)env["__CurrentChunkPos"];
+			var denv = (ENV)env["__DefualtENV"];
+			PM._SetDENV(env);
+			PM.SetENV(denv);
+			PM.SetBlock(name);
+			PM.GetCurrentChunk().SetPos(pos);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+	public void TRACEBACK(parseManager PM)
+	{
+		ENV env = PM.Pop();
+		PM.SetBlock((string)env[0]);
+		var c = PM.GetCurrentChunk();
 		c.SetPos((int)env[1]);
-		SetENV((ENV)env[3]);
+		SetENV(PM,(ENV)env[3]);
 	}
-	public void EXIT()
+	public void EXIT(parseManager PM)
 	{
-		GLOBALS.GetPM().Deactivate();
+		PM.Deactivate();
 	}
-	public void QUIT()
+	public void QUIT(parseManager PM)
 	{
 		Environment.Exit(0);
 	}
-	public void SetENV(ENV env)
+	public void SetENV(parseManager PM, ENV env)
 	{
-		var test = GLOBALS.GetPM();
-		test.SetENV(env);
+		PM.SetENV(env);
 	}
-	public ENV GetENV()
+	public ENV GetENV(parseManager PM)
 	{
-		var test = GLOBALS.GetPM();
-		return test.GetENV();
+		return PM.GetENV();
 	}
-	public ENV GetDefualtENV()
+	public ENV GetDefualtENV(parseManager PM)
 	{
-		var test = GLOBALS.GetPM();
-		return test.GetDENV();
+		return PM.GetDENV();
 	}
-	public ENV CreateENV()
+	public ENV CreateENV(parseManager PM)
 	{
 		var temp = new ENV();
-		var PM = GLOBALS.GetPM();
 		temp.SetParent(PM.GetENV());
 		return temp;
 	}
-	public int GOTO(string label)
+	public string GetInput(parseManager PM)
 	{
-		var test = GLOBALS.GetPM();
-		var c = test.GetCurrentChunk();
+		return Console.ReadLine();
+	}
+	public int GOTO(parseManager PM, string label)
+	{
+		var c = PM.GetCurrentChunk();
 		int pos;
 		if (c.TryGetLabel(label, out pos)) {
 			c.SetPos(pos);
 			return 0;
-		} else if (test.GetFlag("forseelabels")) {
-			var chunks = test.GetChunks();
+		} else if (PM.GetFlag("forseelabels")) {
+			var chunks = PM.GetChunks();
 			for (int i = 0; i < chunks.Length; i++) {
 				if (chunks[i].TryGetLabel(label, out pos)) {
-					test.SetBlock(chunks[i].GetName());
+					PM.SetBlock(chunks[i].GetName());
 					chunks[i].SetPos(pos);
 					return 0;
 				}
 			}
 		}
-		test.PushError("Unable to GOTO a non existing label: " + label + "!");
+		PM.PushError("Unable to GOTO a non existing label: " + label + "!");
 		return 0;
 	}
-	public void JUMP(string block)
+	public double LEN(parseManager PM, object o)
 	{
-		var test = GLOBALS.GetPM();
-		var c = test.GetCurrentChunk();
-		c.ResetPos();
-		test.SetBlock(block);
+		string type = o.GetType().ToString();
+		if (type.Contains("String")) {
+			return (double)((string)o).Length;
+		}
+		if (type.Contains("ENV")) {
+			return (double)((ENV)o).GetList().Length;
+		}
+		return 0;
 	}
-	public void SKIP(double n)
+	public void JUMP(parseManager PM, string block)
 	{
-		var test = GLOBALS.GetPM();
-		var c = test.GetCurrentChunk();
+		var c = PM.GetCurrentChunk();
+		c.ResetPos();
+		PM.SetBlock(block);
+	}
+	public void SKIP(parseManager PM, double n)
+	{
+		var c = PM.GetCurrentChunk();
 		var pos = c.GetPos();
 		c.SetPos(pos + (int)n);
 	}
-	public double ADD(double a, double b)
+	public double tonumber(parseManager PM, string strn)
+	{
+		double d;
+		if (double.TryParse(strn, out d)) {
+			return d;
+		}
+		PM.debug("Cannot convert to a number!");
+		return double.NaN;
+	}
+	public void SLEEP(parseManager PM, double n)
+	{
+		int i = int.Parse(n.ToString()) * 1000;
+		Thread.Sleep(i);
+	}
+	public double ADD(parseManager PM, double a, double b)
 	{
 		return a + b;
 	}
-	public double SUB(double a, double b)
+	public double SUB(parseManager PM, double a, double b)
 	{
 		return a - b;
 	}
-	public double MUL(double a, double b)
+	public double MUL(parseManager PM, double a, double b)
 	{
 		return a * b;
 	}
-	public double DIV(double a, double b)
+	public double DIV(parseManager PM, double a, double b)
 	{
 		return a / b;
 	}
-	public double MOD(double a, double b)
+	public double MOD(parseManager PM, double a, double b)
 	{
 		return a % b;
 	}
-	public double CALC(string ex)
+	public double CALC(parseManager PM, string ex)
 	{
 		return evaluater.Evaluate(ex);
+	}
+	public void print(parseManager PM, object o)
+	{
+		Console.WriteLine(o);
+	}
+	public void write(parseManager PM, object o)
+	{
+		Console.Write(o);
 	}
 }

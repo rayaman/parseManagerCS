@@ -1,0 +1,50 @@
+ENTRY TESTSTART
+[TESTSTART]{
+	"Hello (Press Enter)"
+	print("PLAY SONG (1)")
+	print("MESSAGE (2)")
+	print("An Adventure (3)")
+	print("QUIT (4)")
+	::choice::
+		write("Choose: ")
+		choice=GetInput()
+		if choice=="1" then JUMP("SONG")|SKIP(0)
+		if choice=="2" then JUMP("YO")|SKIP(0)
+		if choice=="4" then QUIT()|SKIP(0)
+		if choice=="3" then SKIP(2)|SKIP(0)
+		GOTO("choice")
+		"We are here now! Time for some fun..."
+		write("Please enter your name: ")
+		name=GetInput()
+		if name=="" then SKIP(-3)|SKIP(0)
+		print("So your name is $name$ huh...")
+		"I won't judge haha"
+		"Anyway let's get controls for that song"
+		print("Stop (s)")
+		print("Play (t)")
+		print("Pause (a)")
+		print("Resume (r)")
+		print("Quit (q)")
+		::control::
+			write("Choose: ")
+			choice=GetInput()
+			if choice=="s" then STOP(song)|SKIP(0)
+			if choice=="t" then JUMP("PLAYS")|SKIP(0)
+			if choice=="a" then PAUSE(song)|SKIP(0)
+			if choice=="r" then RESUME(song)|SKIP(0)
+			if choice=="q" then QUIT()|SKIP(0)
+			GOTO("control")
+}
+[PLAYS]{
+	PAUSE(song)
+	song=PLAY("test.flac")
+	GOTO("control")
+}
+[SONG]{
+	song=PLAY("test.flac")
+	GOTO("choice")
+}
+[YO]{
+	"How are you doing?"
+	GOTO("choice")
+}

@@ -1,0 +1,36 @@
+ENABLE leaking
+[START]{
+	loaded = LOAD()
+	if loaded==true then print("Loaded!")|print("No save file found!")
+	write("Hello! Please enter your name: ")
+	name=GetInput()
+	if name=="" then SKIP(-3)|SKIP(0)
+	print("So your name is $name$ Cool!")
+}
+[Test]{
+	SAVE()
+	"In here now"
+	Choice("Choose: ")
+}
+[Test2]{
+	SAVE()
+	"Over here lol"
+	Choice("Choose: ")
+}
+[Tired]{
+	SAVE()
+	"Done now!"
+	Choice("Choose: ")
+	"We are done!"
+}
+[Choice:function(msg)]{
+	print("Keep Playing (k)")
+	print("Quit (q)")
+	::control::
+		write(msg)
+		choice=GetInput()
+		if choice=="k" then GOTO("end")|SKIP(0)
+		if choice=="q" then QUIT()|SKIP(0)
+		GOTO("control")
+	::end::
+}

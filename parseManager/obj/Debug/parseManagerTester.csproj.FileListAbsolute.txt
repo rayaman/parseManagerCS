@@ -4,3 +4,5 @@ C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debu
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\parseManagerTester.pdb
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.exe
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.pdb
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\CSCore.dll
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\CSCore.xml

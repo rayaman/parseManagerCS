@@ -7,54 +7,92 @@
  * To change this template use Tools | Options | Coding | Edit Standard Headers.
  */
 using System;
-using parseManager; // IMPORTANT
+using System.Threading;
+using CSCore;
+using CSCore.Codecs;
+using CSCore.SoundOut;
+using parseManagerCS;
 public class define : standardDefine // If you want the standard methods you must include this, Also this class cannot be static!
 {
-	public void testM(object arg1,object arg2)
+	double count;
+	ISoundOut GetSoundOut()
 	{
-		Console.WriteLine(arg1+"\t"+arg2);
+		if (WasapiOut.IsSupportedOnCurrentPlatform)
+			return new WasapiOut();
+		else
+			return new DirectSoundOut();
 	}
-	public void testM2(string arg1)
+	IWaveSource GetSoundSource(string path)
 	{
-		Console.WriteLine(arg1 + " it works!!!");
+		return CodecFactory.Instance.GetCodec(path);
 	}
-	public void TEST()
+	public void _play()
 	{
-		var test=GLOBALS.GetPM();
-		var env=test.GetENV();
-		Console.WriteLine(env["test"]);
+		string path = (string)GLOBALS.GetData("__MUSIC");
+		double id = (double)GLOBALS.GetData("__MUSICH");
+		using (IWaveSource soundSource = GetSoundSource(path)) {
+			using (ISoundOut soundOut = GetSoundOut()) {
+				soundOut.Initialize(soundSource);
+				GLOBALS.AddData("__MUSICH" + id, soundOut);
+				soundOut.Play();
+				soundOut.WaitForStopped();
+			}
+		}
 	}
-	public void TEST2(object msg)
+	public void STOP(parseManager PM, double id)
 	{
-		Console.WriteLine(msg);
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Stop();
 	}
-	public void TEST3(double msg, string msg2)
+	public void RESUME(parseManager PM, double id)
 	{
-		Console.WriteLine(msg + "|" + msg2);
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Resume();
 	}
-	public double TEST4(double num){
-		return num+1;
+	public void SETV(parseManager PM, double id, double vol)
+	{
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Volume = (float)vol;
+	}
+	public void PAUSE(parseManager PM, double id)
+	{
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Pause();
+	}
+	public double PLAY(parseManager PM, string filepath)
+	{
+		GLOBALS.AddData("__MUSIC", filepath);
+		GLOBALS.AddData("__MUSICH", count++);
+		var oThread = new Thread(new ThreadStart(_play));
+		oThread.Start();
+		return count - 1;
 	}
 }
-namespace parseManager
+namespace parseManagerCS
 {
 	class Program
 	{
 		public static void Main(string[] args)
 		{
-			parseManager test = new parseManager("parsetest2.txt","define"); // define is where your methods will be held
+			if (args.Length == 0) {
+				Console.Write("Please Include a file path!");
+				Console.ReadLine();
+				Environment.Exit(0);
+			}
+			parseManager test = new parseManager(args[0], "define"); // define is where your methods will be held
+
+			//parseManager test = new parseManager("parsetest2.txt","define");
+			
 			nextType next = test.Next(); // TODO implement the next method
 			string type;
-			while(next.GetCMDType()!="EOF"){
+			while (next.GetCMDType() != "EOF") {
 				type = next.GetCMDType();
-				if(type=="line"){
+				if (type == "line") {
 					Console.Write(next.GetText());
 					Console.ReadLine();
 				}
 				next = test.Next();
 			}
-			Console.Write("Press any key to continue . . . ");
-			Console.ReadKey(true);
 		}
 	}
 }

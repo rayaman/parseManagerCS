@@ -1,56 +1,13 @@
-[TEST]{
-	"Jump was successful!"
-	--GOTO("HERE")
-}
+ENTRY START
 [START]{
-	"Test 1:"
-	-- t=15
-	-- test=2*100
-	-- test2=[1,2,3,4,"HI"]
-	-- test2[5]="HELLO"
-	-- "test2 = $test2$"
-	-- "test = $test$"
-	-- c=5
-	-- ::HERE::
-	-- a,b="sdf",true
-	-- "a,b,c = $a$ $b$ $c$"
-	-- food="yum" 
-	-- test=true
-	-- stop=21
-	-- "food = $food$"
-	-- "test = $test$"
-	-- "stop = $stop$"
-	-- "Test 2:"
-	-- "test2[1] = $test2[1]$"
-	-- testM(2+2,"Test")
-	-- testM(2+2,test2[5])
-	-- count=0
-	-- ::loop::
-		-- "Count = $count$"
-		-- count=count+1
-		-- if count>10 then GOTO("end")|GOTO("loop")
-	-- ::end::
-	-- "Done!"
-	--JUMP("CallMe")
-	env=CreateENV()
-	msg="Hi"
-	SetENV(env)
-	"BEFORE_CHANGE: $msg$"
-	msg=21+7
-	"IN_HERE $msg$"
-	env=GetDefualtENV()
-	SetENV(env)
-	"OUT_HERE $msg$"
-	test=CallMe("This","is a test!")
-	"FENV: $test$"
-	"Did it work!"
-	"HMMM"
-	test=CallMe("This","is a test too!")
-	"FENV: $test$"
-	EXIT()
+	"Hello"
+	song=PLAY("test.flac")
+	print("Hello!")
+	"Don't hit enter!"
+	"Am I still going?"
+	PAUSE(song)
+	"I'm alive!"
+	"Lets resume"
+	RESUME(song)
+	":)"
 }
-[CallMe:function(args1,args2)]{
-	"function was called!"
-	"CALL_TEST: $args1$ $args2$"
-}
--- (count==stop and name=="bob") ? GOTO(end) : GOTO(loop)
