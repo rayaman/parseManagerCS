@@ -20,8 +20,9 @@ namespace parseManagerCS
 		standardDefine _invoke = new standardDefine();
 		string _filepath;
 		bool _active = true;
-		string _define;
+		string _define = "NO_DEFINE";
 		string _entry = "START";
+		bool _isInternal;
 		Type _defineType;
 		standardDefine def = new standardDefine();
 		MethodInfo _defineMethod;
@@ -34,6 +35,25 @@ namespace parseManagerCS
 		Dictionary<string, bool> _flags = new Dictionary<string, bool>();
 		Dictionary<string, chunk> _chunks = new Dictionary<string, chunk>();
 		Dictionary<string, string> _methods = new Dictionary<string, string>();
+		void INITENV()
+		{
+			_mainENV["Color_Black"] = ConsoleColor.Black;
+			_mainENV["Color_Blue"] = ConsoleColor.Blue;
+			_mainENV["Color_Cyan"] = ConsoleColor.Cyan;
+			_mainENV["Color_DarkBlue"] = ConsoleColor.DarkBlue;
+			_mainENV["Color_DarkCyan"] = ConsoleColor.DarkCyan;
+			_mainENV["Color_DarkGray"] = ConsoleColor.DarkGray;
+			_mainENV["Color_DarkGreen"] = ConsoleColor.DarkGreen;
+			_mainENV["Color_DarkMagenta"] = ConsoleColor.DarkMagenta;
+			_mainENV["Color_DarkRed"] = ConsoleColor.DarkRed;
+			_mainENV["Color_DarkYellow"] = ConsoleColor.DarkYellow;
+			_mainENV["Color_Gray"] = ConsoleColor.Gray;
+			_mainENV["Color_Green"] = ConsoleColor.Green;
+			_mainENV["Color_Magenta"] = ConsoleColor.Magenta;
+			_mainENV["Color_Red"] = ConsoleColor.Red;
+			_mainENV["Color_White"] = ConsoleColor.White;
+			_mainENV["Color_Yellow"] = ConsoleColor.Yellow;
+		}
 		public void _SetDENV(ENV env)
 		{
 			_mainENV = env;
@@ -46,6 +66,7 @@ namespace parseManagerCS
 			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
 			_defineClassObject = defineConstructor.Invoke(new object[]{ });
 			_defualtENV = _mainENV;
+			INITENV();
 			Parse();
 		}
 		public parseManager(string filepath, string define)
@@ -57,7 +78,45 @@ namespace parseManagerCS
 			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
 			_defineClassObject = defineConstructor.Invoke(new object[]{ });
 			_defualtENV = _mainENV;
+			INITENV();
 			Parse();
+		}
+		public parseManager(string code, string define, bool c)
+		{
+			InitFlags();
+			_define = define;
+			_filepath = code;
+			_isInternal = true;
+			_defineType = Type.GetType(define);
+			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
+			_defineClassObject = defineConstructor.Invoke(new object[]{ });
+			_defualtENV = _mainENV;
+			INITENV();
+			Parse(code, c);
+		}
+		public parseManager(string code, bool c)
+		{
+			_isInternal = true;
+			InitFlags();
+			_filepath = code;
+			_defineType = Type.GetType("standardDefine");
+			ConstructorInfo defineConstructor = _defineType.GetConstructor(Type.EmptyTypes);
+			_defineClassObject = defineConstructor.Invoke(new object[]{ });
+			_defualtENV = _mainENV;
+			INITENV();
+			Parse(code, c);
+		}
+		public bool IsInternal()
+		{
+			return _isInternal;
+		}
+		public string GetFilepath()
+		{
+			return _filepath;
+		}
+		public string GetDefine()
+		{
+			return _define;
 		}
 		void InitFlags()
 		{
@@ -125,6 +184,10 @@ namespace parseManagerCS
 				Console.WriteLine("File '" + _filepath + "' does not exist! Loading failled!");
 			}
 		}
+		void Parse(string code, bool c)
+		{
+			_Parse(code);
+		}
 		void Parse(string filename)
 		{
 			try {
@@ -175,8 +238,10 @@ namespace parseManagerCS
 			var argsN = c.GetArgs();
 			var fEnv = new ENV();
 			fEnv.SetParent(_defualtENV);
-			for (int i = 0; i < argsN.Length; i++) {
-				fEnv[argsN[i]] = argsV[i];
+			if (!(argsN.Length == 1 && argsN[0] == "")) {
+				for (int i = 0; i < argsN.Length; i++) {
+					fEnv[argsN[i]] = argsV[i];
+				}
 			}
 			var tempEnv = new ENV();
 			tempEnv[0] = ccN;
@@ -187,7 +252,7 @@ namespace parseManagerCS
 				PushError("Stack Overflow!");
 			}
 			_defualtENV = fEnv;
-			def.JUMP(this,method);
+			def.JUMP(this, method);
 			return fEnv; // TODO Handle returns
 		}
 		public object InvokeR(string method, object[] args)
@@ -199,8 +264,8 @@ namespace parseManagerCS
 			try {
 				_defineMethod = _defineType.GetMethod(method);
 				return _defineMethod.Invoke(_defineClassObject, tackBArgs(this, args));
-			} catch {
-				PushError("Invalid method: " + method);
+			} catch (Exception e) {
+				PushError("Invalid method: " + method + "\n\n" + e);
 				return null;
 			}
 		}
@@ -215,18 +280,19 @@ namespace parseManagerCS
 				_defineMethod = _defineType.GetMethod(method);
 				_defineMethod.Invoke(_defineClassObject, tackBArgs(this, args));
 				return 0;
-			} catch {
-				PushError("Invalid method: " + method);
+			} catch (Exception e) {
+				PushError("Invalid method: " + method + "\n\n" + e);
+				return -1;
 			}
-			return -1;
 		}
-		public object[] tackBArgs(object o,object[] args){
+		public object[] tackBArgs(object o, object[] args)
+		{
 			var len = args.Length;
-			var newargs=new object[len+1];
-			for(int i = 0;i<len;i++){
-				newargs[i+1]=args[i];
+			var newargs = new object[len + 1];
+			for (int i = 0; i < len; i++) {
+				newargs[i + 1] = args[i];
 			}
-			newargs[0]=o;
+			newargs[0] = o;
 			return newargs;
 		}
 		public void SetBlock(string BLOCK)
@@ -1140,6 +1206,39 @@ namespace parseManagerCS
 }
 public class standardDefine
 {
+	Random rnd = new Random();
+	public void newThread(parseManager PM, string Block)
+	{
+		var thread = new Thread(() => _THREAD(Block, PM));
+		thread.Start();
+	}
+	public void _THREAD(string block, parseManager _PM)
+	{
+		var define = _PM.GetDefine();
+		var path = _PM.GetFilepath();
+		parseManager PM;
+		if (_PM.IsInternal()) {
+			if (define == "NO_DEFINE") {
+				PM = new parseManager(path, true);
+			} else {
+				PM = new parseManager(path, define, true);
+			}
+		} else {
+			if (define == "NO_DEFINE") {
+				PM = new parseManager(path);
+			} else {
+				PM = new parseManager(path, define);
+			}
+		}
+		PM._SetDENV(_PM.GetDENV());
+		PM.SetENV(_PM.GetENV());
+		nextType next = PM.Next(block);
+		string type;
+		while (next.GetCMDType() != "EOF") {
+			type = next.GetCMDType();
+			next = PM.Next();
+		}
+	}
 	public void SAVE(parseManager PM)
 	{
 		var env = PM.GetDENV();
@@ -1148,6 +1247,10 @@ public class standardDefine
 		env["__CurrentChunkPos"] = c.GetPos();
 		env["__DefualtENV"] = PM.GetENV();
 		GLOBALS.WriteToBinaryFile("savedata.dat", env);
+	}
+	public void save(parseManager PM)
+	{
+		SAVE(PM);
 	}
 	public bool LOAD(parseManager PM)
 	{
@@ -1165,17 +1268,25 @@ public class standardDefine
 			return false;
 		}
 	}
+	public void load(parseManager PM)
+	{
+		LOAD(PM);
+	}
 	public void TRACEBACK(parseManager PM)
 	{
 		ENV env = PM.Pop();
 		PM.SetBlock((string)env[0]);
 		var c = PM.GetCurrentChunk();
 		c.SetPos((int)env[1]);
-		SetENV(PM,(ENV)env[3]);
+		SetENV(PM, (ENV)env[3]);
 	}
 	public void EXIT(parseManager PM)
 	{
 		PM.Deactivate();
+	}
+	public void exit(parseManager PM)
+	{
+		EXIT(PM);
 	}
 	public void QUIT(parseManager PM)
 	{
@@ -1202,6 +1313,28 @@ public class standardDefine
 	public string GetInput(parseManager PM)
 	{
 		return Console.ReadLine();
+	}
+	public void setCC(parseManager PM)
+	{
+		Console.SetCursorPosition(0, Console.CursorTop - 1);
+	}
+	public void whiteOut(parseManager PM)
+	{
+		for (int i = 0; i < Console.BufferWidth; i++) {
+			Console.Write(" ");
+		}
+	}
+	public void SetBG(parseManager PM, ConsoleColor BG)
+	{
+		Console.BackgroundColor = BG;
+	}
+	public void SetFG(parseManager PM, ConsoleColor FG)
+	{
+		Console.ForegroundColor = FG;
+	}
+	public void ResetColor(parseManager PM)
+	{
+		Console.ResetColor();
 	}
 	public int GOTO(parseManager PM, string label)
 	{
@@ -1234,17 +1367,29 @@ public class standardDefine
 		}
 		return 0;
 	}
+	public double len(parseManager PM, object o)
+	{
+		return LEN(PM, o);
+	}
 	public void JUMP(parseManager PM, string block)
 	{
 		var c = PM.GetCurrentChunk();
 		c.ResetPos();
 		PM.SetBlock(block);
 	}
+	public void jump(parseManager PM, string block)
+	{
+		JUMP(PM, block);
+	}
 	public void SKIP(parseManager PM, double n)
 	{
 		var c = PM.GetCurrentChunk();
 		var pos = c.GetPos();
 		c.SetPos(pos + (int)n);
+	}
+	public void skip(parseManager PM, double n)
+	{
+		SKIP(PM, n);
 	}
 	public double tonumber(parseManager PM, string strn)
 	{
@@ -1255,9 +1400,9 @@ public class standardDefine
 		PM.debug("Cannot convert to a number!");
 		return double.NaN;
 	}
-	public void SLEEP(parseManager PM, double n)
+	public void sleep(parseManager PM, double n)
 	{
-		int i = int.Parse(n.ToString()) * 1000;
+		int i = (int)n * 1000;
 		Thread.Sleep(i);
 	}
 	public double ADD(parseManager PM, double a, double b)
@@ -1284,9 +1429,25 @@ public class standardDefine
 	{
 		return evaluater.Evaluate(ex);
 	}
+	public void pause(parseManager PM)
+	{
+		Console.ReadLine();
+	}
 	public void print(parseManager PM, object o)
 	{
 		Console.WriteLine(o);
+	}
+	public double random(parseManager PM, double s, double e)
+	{
+		return (double)rnd.Next((int)s, (int)e);
+	}
+	public double rand(parseManager PM)
+	{
+		return rnd.NextDouble();
+	}
+	public double round(parseManager PM, double num, double n)
+	{
+		return Math.Round(num, (int)n);
 	}
 	public void write(parseManager PM, object o)
 	{

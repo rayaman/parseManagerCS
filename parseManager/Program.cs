@@ -79,11 +79,8 @@ namespace parseManagerCS
 				Console.ReadLine();
 				Environment.Exit(0);
 			}
-			parseManager test = new parseManager(args[0], "define"); // define is where your methods will be held
-
-			//parseManager test = new parseManager("parsetest2.txt","define");
-			
-			nextType next = test.Next(); // TODO implement the next method
+			parseManager PM = new parseManager(args[0], "define");
+			nextType next = PM.Next();
 			string type;
 			while (next.GetCMDType() != "EOF") {
 				type = next.GetCMDType();
@@ -91,7 +88,7 @@ namespace parseManagerCS
 					Console.Write(next.GetText());
 					Console.ReadLine();
 				}
-				next = test.Next();
+				next = PM.Next();
 			}
 		}
 	}

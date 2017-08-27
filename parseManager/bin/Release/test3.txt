@@ -1,4 +1,20 @@
+[THREAD]{
+	::loop::
+		n=random(1,4)
+		if n==1 then SetFG(Color_Blue)|SKIP(0)
+		if n==2 then SetFG(Color_Red)|SKIP(0)
+		if n==3 then SetFG(Color_Green)|SKIP(0)
+		if n==4 then SetFG(Color_Yellow)|SKIP(0)
+		sleep(.1)
+		GOTO("loop")
+}
 [START]{
-	print("Testing")
-	"Done!"
+	print("Testing threading!")
+	n==0
+	newThread("THREAD")
+	c=0
+	::loop::
+		c=c+1
+		"c = $c$ n = $n$"
+		GOTO("loop")
 }

@@ -16,8 +16,7 @@ ENTRY TESTSTART
 		if choice=="1" then JUMP("SONG")|SKIP(0)
 		if choice=="2" then JUMP("YO")|SKIP(0)
 		if choice=="4" then QUIT()|SKIP(0)
-		if choice=="3" then SKIP(3)|SKIP(0)
-		setCC()
+		if choice=="3" then SKIP(2)|SKIP(0)
 		GOTO("choice")
 		"We are here now! Time for some fun..."
 		write("Please enter your name: ")
