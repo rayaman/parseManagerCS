@@ -6,10 +6,15 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Reflection;
+using CSCore;
+using CSCore.Codecs;
+using CSCore.SoundOut;
 using parseManagerCS;
 using System.Threading;
+using FancyPrintCS;
 namespace parseManagerCS
 {
 	/// The parseManager is an Advance Config Script
@@ -156,7 +161,8 @@ namespace parseManagerCS
 //			foreach (Match m in Regex.Matches(data, @"USING ([a-zA-Z0-9_\./]+)")) {
 //				m.Groups[1].ToString();
 //			}
-			var match = Regex.Matches(data, @"\[(.+)\][\r\n]*?\{([^\0]+?)\}");
+			data = data + "\n";
+			var match = Regex.Matches(data, "\\[(.+)\\][\r\n]*?\\{([^\0]+?)\\}\r?\n");
 			var count = 0;
 			foreach (Match m in match) {
 				string Blck = m.Groups[1].ToString();
@@ -307,6 +313,9 @@ namespace parseManagerCS
 		}
 		public ENV GetENV()
 		{
+			if (_defualtENV == null) {
+				return _mainENV;
+			}
 			return _defualtENV;
 		}
 		public ENV GetDENV()
@@ -535,7 +544,7 @@ namespace parseManagerCS
 			bool boo;
 			double ex;
 			for (int i = 0; i < len; i++) {
-				if (!v[i].StartsWith("["))
+				if (!v[i].StartsWith("[") && !v[i].StartsWith("\""))
 					ex = evaluater.Evaluate(v[i]);
 				else
 					ex = double.NaN;
@@ -671,9 +680,9 @@ namespace parseManagerCS
 			var m = Regex.Match(_type, @"([a-zA-Z0-9_]+)");
 			_pureType = m.Groups[1].ToString();
 			var tCont = Regex.Replace(cont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\-\-.+\r\n", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\-\-.+\n", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\t", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"^\-\-.+\r\n", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"^\-\-.+\n", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\n\n", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\r\n\r\n", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
@@ -1206,6 +1215,7 @@ namespace parseManagerCS
 }
 public class standardDefine
 {
+	double count;
 	Random rnd = new Random();
 	public void newThread(parseManager PM, string Block)
 	{
@@ -1248,10 +1258,6 @@ public class standardDefine
 		env["__DefualtENV"] = PM.GetENV();
 		GLOBALS.WriteToBinaryFile("savedata.dat", env);
 	}
-	public void save(parseManager PM)
-	{
-		SAVE(PM);
-	}
 	public bool LOAD(parseManager PM)
 	{
 		try {
@@ -1268,49 +1274,41 @@ public class standardDefine
 			return false;
 		}
 	}
-	public void load(parseManager PM)
-	{
-		LOAD(PM);
-	}
 	public void TRACEBACK(parseManager PM)
 	{
 		ENV env = PM.Pop();
 		PM.SetBlock((string)env[0]);
 		var c = PM.GetCurrentChunk();
 		c.SetPos((int)env[1]);
-		SetENV(PM, (ENV)env[3]);
+		setENV(PM, (ENV)env[3]);
 	}
 	public void EXIT(parseManager PM)
 	{
 		PM.Deactivate();
 	}
-	public void exit(parseManager PM)
-	{
-		EXIT(PM);
-	}
 	public void QUIT(parseManager PM)
 	{
 		Environment.Exit(0);
 	}
-	public void SetENV(parseManager PM, ENV env)
+	public void setENV(parseManager PM, ENV env)
 	{
 		PM.SetENV(env);
 	}
-	public ENV GetENV(parseManager PM)
+	public ENV getENV(parseManager PM)
 	{
 		return PM.GetENV();
 	}
-	public ENV GetDefualtENV(parseManager PM)
+	public ENV getDefualtENV(parseManager PM)
 	{
 		return PM.GetDENV();
 	}
-	public ENV CreateENV(parseManager PM)
+	public ENV createENV(parseManager PM)
 	{
 		var temp = new ENV();
 		temp.SetParent(PM.GetENV());
 		return temp;
 	}
-	public string GetInput(parseManager PM)
+	public string getInput(parseManager PM)
 	{
 		return Console.ReadLine();
 	}
@@ -1324,15 +1322,15 @@ public class standardDefine
 			Console.Write(" ");
 		}
 	}
-	public void SetBG(parseManager PM, ConsoleColor BG)
+	public void setBG(parseManager PM, ConsoleColor BG)
 	{
 		Console.BackgroundColor = BG;
 	}
-	public void SetFG(parseManager PM, ConsoleColor FG)
+	public void setFG(parseManager PM, ConsoleColor FG)
 	{
 		Console.ForegroundColor = FG;
 	}
-	public void ResetColor(parseManager PM)
+	public void resetColor(parseManager PM)
 	{
 		Console.ResetColor();
 	}
@@ -1356,7 +1354,7 @@ public class standardDefine
 		PM.PushError("Unable to GOTO a non existing label: " + label + "!");
 		return 0;
 	}
-	public double LEN(parseManager PM, object o)
+	public double len(parseManager PM, object o)
 	{
 		string type = o.GetType().ToString();
 		if (type.Contains("String")) {
@@ -1367,29 +1365,17 @@ public class standardDefine
 		}
 		return 0;
 	}
-	public double len(parseManager PM, object o)
-	{
-		return LEN(PM, o);
-	}
 	public void JUMP(parseManager PM, string block)
 	{
 		var c = PM.GetCurrentChunk();
 		c.ResetPos();
 		PM.SetBlock(block);
 	}
-	public void jump(parseManager PM, string block)
-	{
-		JUMP(PM, block);
-	}
 	public void SKIP(parseManager PM, double n)
 	{
 		var c = PM.GetCurrentChunk();
 		var pos = c.GetPos();
 		c.SetPos(pos + (int)n);
-	}
-	public void skip(parseManager PM, double n)
-	{
-		SKIP(PM, n);
 	}
 	public double tonumber(parseManager PM, string strn)
 	{
@@ -1402,8 +1388,12 @@ public class standardDefine
 	}
 	public void sleep(parseManager PM, double n)
 	{
-		int i = (int)n * 1000;
-		Thread.Sleep(i);
+		Thread.Sleep((int)n);
+	}
+	public void setVar(parseManager PM, string var, object value)
+	{
+		var env = PM.GetDENV();
+		env[var] = value;
 	}
 	public double ADD(parseManager PM, double a, double b)
 	{
@@ -1449,8 +1439,83 @@ public class standardDefine
 	{
 		return Math.Round(num, (int)n);
 	}
+	public void clear(parseManager PM)
+	{
+		Console.Clear();
+	}
 	public void write(parseManager PM, object o)
 	{
 		Console.Write(o);
+	}
+	public void backspace(parseManager PM)
+	{
+		Console.Write("\b");
+	}
+	public void beep(parseManager PM)
+	{
+		Console.Beep();
+	}
+	public void fancy(parseManager PM, string form, string msg)
+	{
+		Fancy.SetForm(form);
+		Fancy.Print(msg);
+	}
+	ISoundOut GetSoundOut()
+	{
+		if (WasapiOut.IsSupportedOnCurrentPlatform)
+			return new WasapiOut();
+		else
+			return new DirectSoundOut();
+	}
+	IWaveSource GetSoundSource(string path)
+	{
+		return CodecFactory.Instance.GetCodec(path);
+	}
+	public void _load()
+	{
+		string path = (string)GLOBALS.GetData("__MUSIC");
+		double id = (double)GLOBALS.GetData("__MUSICH");
+		using (IWaveSource soundSource = GetSoundSource(path)) {
+			using (ISoundOut soundOut = GetSoundOut()) {
+				soundOut.Initialize(soundSource);
+				GLOBALS.AddData("__MUSICH" + id, soundOut);
+				while (true) {
+					Thread.Sleep(100);
+				}
+			}
+		}
+	}
+	public void stopSong(parseManager PM, double id)
+	{
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Stop();
+	}
+	public void playSong(parseManager PM, double id)
+	{
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Play();
+	}
+	public void resumeSong(parseManager PM, double id)
+	{
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Resume();
+	}
+	public void setSongVolume(parseManager PM, double id, double vol)
+	{
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Volume = (float)vol;
+	}
+	public void pauseSong(parseManager PM, double id)
+	{
+		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
+		sound.Pause();
+	}
+	public double loadSong(parseManager PM, string filepath)
+	{
+		GLOBALS.AddData("__MUSIC", filepath);
+		GLOBALS.AddData("__MUSICH", count++);
+		var oThread = new Thread(new ThreadStart(_load));
+		oThread.Start();
+		return count - 1;
 	}
 }

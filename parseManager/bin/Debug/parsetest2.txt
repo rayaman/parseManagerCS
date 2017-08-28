@@ -1,13 +1,48 @@
-ENTRY START
-[START]{
-	"Hello"
-	song=PLAY("test.flac")
-	print("Hello!")
-	"Don't hit enter!"
-	"Am I still going?"
-	PAUSE(song)
-	"I'm alive!"
-	"Lets resume"
-	RESUME(song)
-	":)"
+ENTRY STARTHERE
+[STARTHERE]{
+	write("Name: ")
+	name=getInput()
+	clear()
+	if name=="" then SKIP(-4)|SKIP(0)
+	PAUSE("So your name is $name$, thats cool!")
+	pos=1
+	::loop::
+		clear()
+		setFG(Color_Blue)
+		fancy("left","  What to do $name$?,/l,  Play Game,  View Stats,  View Credits,  Quit Game")
+		keyUP=isDown("{UP}")
+		keyDOWN=isDown("{DOWN}")
+		keyENTER=isDown("{RIGHT}")
+		if keyUP==true then setVarPlay("pos",pos-1)|SKIP(0)
+		if keyDOWN==true then setVarPlay("pos",pos+1)|SKIP(0)
+		if keyENTER==true then GOTO("choicemade")|SKIP(0)
+		writeAt("->",1,pos+2)
+		sleep(75)
+		GOTO("loop")
+	::choicemade::
+		if pos==1 then print("You Pressed Play!")|SKIP(0)
+		if pos==2 then print("You Pressed Stats")|SKIP(0)
+		if pos==3 then print("You Pressed Credits")|SKIP(0)
+		if pos==4 then print("You Pressed Quit")|SKIP(0)
+		PAUSE("Tests done (Press Enter!)")
+}
+[PAUSE:function(msg)]{
+	write(msg)
+	::loop::
+		keyENTER=isDown("{ENTER}")
+		if keyENTER==true then SKIP(0)|GOTO("loop")
+	print(" ")
+}
+[setVarPlay:function(var,val)]{
+	setVar(var,val)
+	if pos<1 then GOTO("toolittle")|SKIP(0)
+	if pos>4 then GOTO("toomuch")|SKIP(0)
+	beep()
+	GOTO("end")
+	::toolittle::
+		setVar("pos",1)
+		GOTO("end")
+	::toomuch::
+		setVar("pos",4)
+	::end::
 }

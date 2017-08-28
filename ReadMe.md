@@ -5,7 +5,7 @@ TODO:
 - [ ] Add other cool built in things (Fun)
 - [ ] Add object support (Tough)
 - [ ] Improve audio support (Simple)
-- [ ] Add simple threading (Alright)
+- [x] Add simple threading (Alright)
 - [ ] Fix Bugs! (Death)
 
 Maybe:

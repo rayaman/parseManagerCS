@@ -1,29 +1,28 @@
 ENTRY TESTSTART
 [TESTSTART]{
-	SetFG(Color_Blue)
-	write("This is blue ")
-	SetFG(Color_Red)
-	print("This is red")
-	ResetColor()
+	song=loadSong("test.flac")
+	setFG(Color_Blue)
 	"Hello (Press Enter)"
-	print("PLAY SONG (1)")
-	print("MESSAGE (2)")
-	print("An Adventure (3)")
-	print("QUIT (4)")
+	-- print("PLAY SONG (1)")
+	-- print("MESSAGE (2)")
+	-- print("An Adventure (3)")
+	-- print("QUIT (4)")
+	fancy("left","PLAY SONG (1),MESSAGE (2),An Adventure (3),QUIT (4)")
 	::choice::
 		write("Choose: ")
-		choice=GetInput()
+		choice=getInput()
 		if choice=="1" then JUMP("SONG")|SKIP(0)
 		if choice=="2" then JUMP("YO")|SKIP(0)
 		if choice=="4" then QUIT()|SKIP(0)
 		if choice=="3" then SKIP(2)|SKIP(0)
 		GOTO("choice")
 		"We are here now! Time for some fun..."
+		::name::
 		write("Please enter your name: ")
-		name=GetInput()
-		setCC()
-		if name=="" then SKIP(-4)|SKIP(0)
+		name=getInput()
 		ClearLine()
+		setCC()
+		if name=="" then GOTO("name")|SKIP(0)
 		print("So your name is $name$ huh...")
 		"I won't judge haha"
 		"Anyway let's get controls for that song"
@@ -34,11 +33,11 @@ ENTRY TESTSTART
 		print("Quit (q)")
 		::control::
 			write("Choose: ")
-			choice=GetInput()
+			choice=getInput()
 			if choice=="s" then STOP(song)|SKIP(0)
 			if choice=="t" then JUMP("PLAYS")|SKIP(0)
-			if choice=="a" then PAUSE(song)|SKIP(0)
-			if choice=="r" then RESUME(song)|SKIP(0)
+			if choice=="a" then pauseSong(song)|SKIP(0)
+			if choice=="r" then resumeSong(song)|SKIP(0)
 			if choice=="q" then QUIT()|SKIP(0)
 			GOTO("control")
 }
@@ -47,12 +46,13 @@ ENTRY TESTSTART
 	setCC()
 }
 [PLAYS]{
-	PAUSE(song)
-	song=PLAY("test.flac")
+	pauseSong(song)
+	song=loadSong("test.flac")
+	playSong(song)
 	GOTO("control")
 }
 [SONG]{
-	song=PLAY("test.flac")
+	playSong(song)
 	GOTO("choice")
 }
 [YO]{
