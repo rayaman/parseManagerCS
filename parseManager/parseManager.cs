@@ -4,17 +4,17 @@
  * Time: 11:54 AM
  */
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Reflection;
-using CSCore;
-using CSCore.Codecs;
-using CSCore.SoundOut;
-using parseManagerCS;
 using System.Threading;
+using System.Windows.Input;
 using FancyPrintCS;
+using NAudio.Wave;
+using parseManagerCS;
 namespace parseManagerCS
 {
 	/// The parseManager is an Advance Config Script
@@ -22,6 +22,7 @@ namespace parseManagerCS
 	/// This also has very flexible flow control meaning you can use it for chat logic and such
 	public class parseManager
 	{
+		public string _VERSION = "1.0";
 		standardDefine _invoke = new standardDefine();
 		string _filepath;
 		bool _active = true;
@@ -29,6 +30,7 @@ namespace parseManagerCS
 		string _entry = "START";
 		bool _isInternal;
 		Type _defineType;
+		bool isThread;
 		standardDefine def = new standardDefine();
 		MethodInfo _defineMethod;
 		object _defineClassObject;
@@ -42,6 +44,7 @@ namespace parseManagerCS
 		Dictionary<string, string> _methods = new Dictionary<string, string>();
 		void INITENV()
 		{
+			GLOBALS.SetPM(this);
 			_mainENV["Color_Black"] = ConsoleColor.Black;
 			_mainENV["Color_Blue"] = ConsoleColor.Blue;
 			_mainENV["Color_Cyan"] = ConsoleColor.Cyan;
@@ -62,6 +65,12 @@ namespace parseManagerCS
 		public void _SetDENV(ENV env)
 		{
 			_mainENV = env;
+		}
+		public void makeThread(){
+			isThread=true;
+		}
+		public bool isAThread(){
+			return isThread;
 		}
 		public parseManager(string filepath)
 		{
@@ -129,6 +138,7 @@ namespace parseManagerCS
 			_flags.Add("forseelabels", true);
 			_flags.Add("debugging", false);
 			_flags.Add("topdown", true);
+			_flags.Add("casesensitive", true);
 		}
 		public ENV Pop()
 		{
@@ -153,10 +163,18 @@ namespace parseManagerCS
 				Parse(m.Groups[1].ToString());
 			}
 			foreach (Match m in Regex.Matches(data, @"ENABLE ([a-zA-Z0-9_\./]+)")) {
-				_flags[m.Groups[1].ToString()] = true;
+				_flags[m.Groups[1].ToString().ToLower()] = true;
+			}
+			foreach (Match m in Regex.Matches(data, @"DISABLE ([a-zA-Z0-9_\./]+)")) {
+				_flags[m.Groups[1].ToString().ToLower()] = false;
 			}
 			foreach (Match m in Regex.Matches(data, @"ENTRY ([a-zA-Z0-9_\./]+)")) {
 				_entry = m.Groups[1].ToString();
+			}
+			foreach (Match m in Regex.Matches(data, @"VERSION ([a-zA-Z0-9_\./]+)")) {
+				if (Version.Parse(m.Groups[1].ToString()) != Version.Parse(_VERSION)) {
+					PushError("Attempt to run a code created for a different version of the interperter/compiler!");
+				}
 			}
 //			foreach (Match m in Regex.Matches(data, @"USING ([a-zA-Z0-9_\./]+)")) {
 //				m.Groups[1].ToString();
@@ -237,7 +255,7 @@ namespace parseManagerCS
 			}
 			return false;
 		}
-		public object InvokeI(string method, object[] argsV, chunk c)
+		public object InvokeI(string method, object[] argsV, chunk c,bool rets)
 		{
 			var ccP = _currentChunk.GetPos();
 			var ccN = _currentChunk.GetName();
@@ -259,13 +277,17 @@ namespace parseManagerCS
 			}
 			_defualtENV = fEnv;
 			def.JUMP(this, method);
-			return fEnv; // TODO Handle returns
+			if(rets){
+				return fEnv; // TODO Handle returns
+			} else {
+				return null;
+			}
 		}
 		public object InvokeR(string method, object[] args)
 		{
 			chunk c;
 			if (isRegisteredFunction(method, out c)) {
-				return InvokeI(method, args, c);
+				return InvokeI(method, args, c, true);
 			}
 			try {
 				_defineMethod = _defineType.GetMethod(method);
@@ -279,7 +301,7 @@ namespace parseManagerCS
 		{
 			chunk c;
 			if (isRegisteredFunction(method, out c)) {
-				InvokeI(method, args, c);
+				InvokeI(method, args, c, false);
 				return 0;
 			}
 			try {
@@ -1022,6 +1044,9 @@ namespace parseManagerCS
 		public object this[string ind] {
 			get {
 				object obj;
+				if (!GLOBALS.GetFlag("casesensitive")) {
+					ind = ind.ToLower();
+				}
 				if (_vars.TryGetValue(ind, out obj)) {
 					return obj;
 				}
@@ -1031,6 +1056,9 @@ namespace parseManagerCS
 				return null;
 			}
 			set {
+				if (!GLOBALS.GetFlag("casesensitive")) {
+					ind = ind.ToLower();
+				}
 				_vars[ind] = value;
 			}
 		}
@@ -1116,6 +1144,20 @@ namespace parseManagerCS
 		static parseManager _current;
 		static readonly ENV _env = new ENV();
 		static List<string> _numvars = new List<string>();
+		static List<parseManager> _Threads = new List<parseManager>();
+		public static void AddThread(parseManager PM)
+		{
+			_Threads.Add(PM);
+		}
+		public static void FixThreads(parseManager PM)
+		{
+			var PMS = _Threads.ToArray();
+			var env = PM.GetDENV();
+			for (int i = 0; i < PMS.Length; i++) {
+				PMS[i]._SetDENV(env);
+				PMS[i].SetENV(env);
+			}
+		}
 		public static void WriteToBinaryFile(string filePath, ENV objectToWrite, bool append = false)
 		{
 			using (Stream stream = File.Open(filePath, append ? FileMode.Append : FileMode.Create)) {
@@ -1149,6 +1191,11 @@ namespace parseManagerCS
 		public static parseManager GetPM()
 		{
 			return _current;
+		}
+		public static bool GetFlag(string flag)
+		{
+			var PM = GetPM();
+			return PM.GetFlag(flag);
 		}
 		public static void Add_Var(string var)
 		{
@@ -1215,8 +1262,11 @@ namespace parseManagerCS
 }
 public class standardDefine
 {
-	double count;
+	List<IWavePlayer> devices = new List<IWavePlayer>();
+	int count = -1;
 	Random rnd = new Random();
+	int origRow = Console.CursorTop;
+	int origCol = Console.CursorLeft;
 	public void newThread(parseManager PM, string Block)
 	{
 		var thread = new Thread(() => _THREAD(Block, PM));
@@ -1240,6 +1290,8 @@ public class standardDefine
 				PM = new parseManager(path, define);
 			}
 		}
+		GLOBALS.AddThread(PM);
+		PM.makeThread();
 		PM._SetDENV(_PM.GetDENV());
 		PM.SetENV(_PM.GetENV());
 		nextType next = PM.Next(block);
@@ -1251,6 +1303,9 @@ public class standardDefine
 	}
 	public void SAVE(parseManager PM)
 	{
+		if(PM.isAThread()){
+			PM.PushError("Cannot Call SAVE() in a thread!");
+		}
 		var env = PM.GetDENV();
 		var c = PM.GetCurrentChunk();
 		env["__CurrentChunkName"] = c.GetName();
@@ -1260,6 +1315,9 @@ public class standardDefine
 	}
 	public bool LOAD(parseManager PM)
 	{
+		if(PM.isAThread()){
+			PM.PushError("Cannot Call LOAD() in a thread!");
+		}
 		try {
 			ENV env = GLOBALS.ReadFromBinaryFile("savedata.dat");
 			var name = (string)env["__CurrentChunkName"];
@@ -1269,6 +1327,7 @@ public class standardDefine
 			PM.SetENV(denv);
 			PM.SetBlock(name);
 			PM.GetCurrentChunk().SetPos(pos);
+			GLOBALS.FixThreads(PM);
 			return true;
 		} catch {
 			return false;
@@ -1284,10 +1343,12 @@ public class standardDefine
 	}
 	public void EXIT(parseManager PM)
 	{
+		cleanUpAudio();
 		PM.Deactivate();
 	}
 	public void QUIT(parseManager PM)
 	{
+		cleanUpAudio();
 		Environment.Exit(0);
 	}
 	public void setENV(parseManager PM, ENV env)
@@ -1455,67 +1516,189 @@ public class standardDefine
 	{
 		Console.Beep();
 	}
-	public void fancy(parseManager PM, string form, string msg)
+	public void fancy(parseManager PM, string msg)
 	{
-		Fancy.SetForm(form);
 		Fancy.Print(msg);
 	}
-	ISoundOut GetSoundOut()
+	public void setFancyForm(parseManager PM, string form)
 	{
-		if (WasapiOut.IsSupportedOnCurrentPlatform)
-			return new WasapiOut();
-		else
-			return new DirectSoundOut();
+		Fancy.SetForm(form);
 	}
-	IWaveSource GetSoundSource(string path)
+	public void setFancyType(parseManager PM, double f)
 	{
-		return CodecFactory.Instance.GetCodec(path);
-	}
-	public void _load()
-	{
-		string path = (string)GLOBALS.GetData("__MUSIC");
-		double id = (double)GLOBALS.GetData("__MUSICH");
-		using (IWaveSource soundSource = GetSoundSource(path)) {
-			using (ISoundOut soundOut = GetSoundOut()) {
-				soundOut.Initialize(soundSource);
-				GLOBALS.AddData("__MUSICH" + id, soundOut);
-				while (true) {
-					Thread.Sleep(100);
-				}
-			}
-		}
+		Fancy.SetFVar((int)f);
 	}
 	public void stopSong(parseManager PM, double id)
 	{
-		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
-		sound.Stop();
+		devices[(int)id].Stop();
 	}
 	public void playSong(parseManager PM, double id)
 	{
-		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
-		sound.Play();
+		devices[(int)id].Play();
 	}
 	public void resumeSong(parseManager PM, double id)
 	{
-		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
-		sound.Resume();
+		devices[(int)id].Play();
 	}
 	public void setSongVolume(parseManager PM, double id, double vol)
 	{
-		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
-		sound.Volume = (float)vol;
+		devices[(int)id].Volume = (float)vol;
 	}
 	public void pauseSong(parseManager PM, double id)
 	{
-		var sound = (ISoundOut)GLOBALS.GetData("__MUSICH" + id);
-		sound.Pause();
+		devices[(int)id].Pause();
+	}
+	public void replaySong(parseManager PM, double id)
+	{
+		devices[(int)id].Stop();
+		devices[(int)id].Play();
 	}
 	public double loadSong(parseManager PM, string filepath)
 	{
-		GLOBALS.AddData("__MUSIC", filepath);
-		GLOBALS.AddData("__MUSICH", count++);
-		var oThread = new Thread(new ThreadStart(_load));
-		oThread.Start();
-		return count - 1;
+		count++;
+		devices.Add(new WaveOut());
+		var temp = new AudioFileReader(filepath);
+		devices[count].Init(temp);
+		return count;
 	}
+	void cleanUpAudio()
+	{
+		for (int i = 0; i < devices.Count; i++) {
+			devices[i].Stop();
+			devices[i].Dispose();
+		}
+	}
+	public void setPosition(parseManager PM, double x, double y)
+	{
+		Console.SetCursorPosition((int)x, (int)y);
+	}
+	public void writeAt(parseManager PM, string s, double x, double y)
+	{
+		try {
+			Console.SetCursorPosition(origCol + (int)x, origRow + (int)y);
+			Console.Write(s);
+		} catch (ArgumentOutOfRangeException e) {
+			Console.Clear();
+			Console.WriteLine(e.Message);
+		}
+	}
+	public bool isDown(parseManager PM, string key)
+	{
+		if (!ApplicationIsActivated()) {
+			return false;
+		}
+		Key kk = Key.Zoom;
+		var k = key.ToUpper();
+		if (k == "A") {
+			kk = Key.A;
+		} else if (k == "B") {
+			kk = Key.B;
+		} else if (k == "C") {
+			kk = Key.C;
+		} else if (k == "D") {
+			kk = Key.D;
+		} else if (k == "E") {
+			kk = Key.E;
+		} else if (k == "F") {
+			kk = Key.F;
+		} else if (k == "G") {
+			kk = Key.G;
+		} else if (k == "H") {
+			kk = Key.H;
+		} else if (k == "I") {
+			kk = Key.I;
+		} else if (k == "J") {
+			kk = Key.J;
+		} else if (k == "K") {
+			kk = Key.K;
+		} else if (k == "L") {
+			kk = Key.L;
+		} else if (k == "M") {
+			kk = Key.M;
+		} else if (k == "N") {
+			kk = Key.N;
+		} else if (k == "O") {
+			kk = Key.O;
+		} else if (k == "P") {
+			kk = Key.P;
+		} else if (k == "Q") {
+			kk = Key.Q;
+		} else if (k == "R") {
+			kk = Key.R;
+		} else if (k == "S") {
+			kk = Key.S;
+		} else if (k == "T") {
+			kk = Key.T;
+		} else if (k == "U") {
+			kk = Key.U;
+		} else if (k == "V") {
+			kk = Key.V;
+		} else if (k == "W") {
+			kk = Key.W;
+		} else if (k == "X") {
+			kk = Key.X;
+		} else if (k == "Y") {
+			kk = Key.Y;
+		} else if (k == "Z") {
+			kk = Key.Z;
+		} else if (k == "{UP}") {
+			kk = Key.Up;
+		} else if (k == "{DOWN}") {
+			kk = Key.Down;
+		} else if (k == "{LEFT}") {
+			kk = Key.Left;
+		} else if (k == "{RIGHT}") {
+			kk = Key.Right;
+		} else if (k == "{ENTER}") {
+			kk = Key.Enter;
+		} else if (k == "{LSHIFT}") {
+			kk = Key.LeftShift;
+		} else if (k == "{RSHIFT}") {
+			kk = Key.RightShift;
+		} else if (k == "0") {
+			kk = Key.D0;
+		} else if (k == "1") {
+			kk = Key.D1;
+		} else if (k == "2") {
+			kk = Key.D2;
+		} else if (k == "3") {
+			kk = Key.D3;
+		} else if (k == "4") {
+			kk = Key.D4;
+		} else if (k == "5") {
+			kk = Key.D5;
+		} else if (k == "6") {
+			kk = Key.D6;
+		} else if (k == "7") {
+			kk = Key.D7;
+		} else if (k == "8") {
+			kk = Key.D8;
+		} else if (k == "9") {
+			kk = Key.D9;
+		} else if (k == "{SPACE}") {
+			kk = Key.Space;
+		}
+		return Keyboard.IsKeyDown(kk);
+	}
+	public string isPressing(parseManager PM)
+	{
+		return Console.ReadKey(true).Key.ToString();
+	}
+	public static bool ApplicationIsActivated()
+	{
+		var activatedHandle = GetForegroundWindow();
+		if (activatedHandle == IntPtr.Zero) {
+			return false;       // No window is currently activated
+		} else {
+			var procId = Process.GetCurrentProcess().Id;
+			int activeProcId;
+			GetWindowThreadProcessId(activatedHandle, out activeProcId);
+			return activeProcId == procId;
+		}
+	}
+	[DllImport("user32.dll", CharSet = CharSet.Auto, ExactSpelling = true)]
+	static extern IntPtr GetForegroundWindow();
+
+	[DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+	static extern int GetWindowThreadProcessId(IntPtr handle, out int processId);
 }

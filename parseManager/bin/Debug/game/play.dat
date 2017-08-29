@@ -1,0 +1,4 @@
+[PLAYGAME]{
+	print("Welcome to my game!")
+	PAUSE("ENJOY!")
+}

@@ -31,6 +31,13 @@ namespace FancyPrintCS
 				form = n;
 			}
 		}
+		public static void SetFVar(int f){
+			if(f<0 || f>6){
+				Console.WriteLine("Invalid int value! Only 0-7 is allowed!");
+			} else {
+				fvar=f;
+			}
+		}
 		public static void SetForm(string n)
 		{
 			if (n.ToLower()=="left"){
