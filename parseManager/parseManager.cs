@@ -4,6 +4,7 @@
  * Time: 11:54 AM
  */
 using System;
+using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
@@ -18,11 +19,11 @@ using parseManagerCS;
 namespace parseManagerCS
 {
 	/// The parseManager is an Advance Config Script
-	/// It allows the user to run code while also definine variables
+	/// It allows the user to run code while also defining variables
 	/// This also has very flexible flow control meaning you can use it for chat logic and such
 	public class parseManager
 	{
-		public string _VERSION = "1.0";
+		public string _VERSION = "1.3.0";
 		standardDefine _invoke = new standardDefine();
 		string _filepath;
 		bool _active = true;
@@ -61,15 +62,18 @@ namespace parseManagerCS
 			_mainENV["Color_Red"] = ConsoleColor.Red;
 			_mainENV["Color_White"] = ConsoleColor.White;
 			_mainENV["Color_Yellow"] = ConsoleColor.Yellow;
+			_mainENV["VERSION"] = _VERSION;
 		}
 		public void _SetDENV(ENV env)
 		{
 			_mainENV = env;
 		}
-		public void makeThread(){
-			isThread=true;
+		public void makeThread()
+		{
+			isThread = true;
 		}
-		public bool isAThread(){
+		public bool isAThread()
+		{
 			return isThread;
 		}
 		public parseManager(string filepath)
@@ -139,6 +143,7 @@ namespace parseManagerCS
 			_flags.Add("debugging", false);
 			_flags.Add("topdown", true);
 			_flags.Add("casesensitive", true);
+			_flags.Add("strictsyntax",false);
 		}
 		public ENV Pop()
 		{
@@ -157,7 +162,8 @@ namespace parseManagerCS
 			if (_flags["debugging"])
 				Console.WriteLine("DEBUGGING: " + msg);
 		}
-		void _Parse(string data)
+		
+		void _Parse(string data, string hFile)
 		{
 			foreach (Match m in Regex.Matches(data, @"LOAD ([a-zA-Z0-9_\./]+)")) {
 				Parse(m.Groups[1].ToString());
@@ -172,13 +178,13 @@ namespace parseManagerCS
 				_entry = m.Groups[1].ToString();
 			}
 			foreach (Match m in Regex.Matches(data, @"VERSION ([a-zA-Z0-9_\./]+)")) {
-				if (Version.Parse(m.Groups[1].ToString()) != Version.Parse(_VERSION)) {
-					PushError("Attempt to run a code created for a different version of the interperter/compiler!");
+				if (Version.Parse(m.Groups[1].ToString()) > Version.Parse(_VERSION)) {
+					PushError("Attempt to run a code created for a greater version of the interperter/compiler! Script's Version: "+Version.Parse(m.Groups[1].ToString())+" Interperter's Version: "+Version.Parse(_VERSION));
 				}
 			}
-//			foreach (Match m in Regex.Matches(data, @"USING ([a-zA-Z0-9_\./]+)")) {
-//				m.Groups[1].ToString();
-//			}
+			foreach (Match m in Regex.Matches(data, @"THREAD ([a-zA-Z0-9_\./]+)")) {
+				def._newThread(this, m.Groups[1].ToString());
+			}
 			data = data + "\n";
 			var match = Regex.Matches(data, "\\[(.+)\\][\r\n]*?\\{([^\0]+?)\\}\r?\n");
 			var count = 0;
@@ -193,6 +199,7 @@ namespace parseManagerCS
 					_chunks[Blck] = new chunk(Blck, Cont);
 				}
 				count++;
+				_chunks[Blck].SetHostFile(hFile);
 				if (_lastChunk != null)
 					_lastChunk.SetNextChunk(_chunks[Blck]);
 				_lastChunk = _chunks[Blck];
@@ -202,29 +209,29 @@ namespace parseManagerCS
 		{
 			try {
 				StreamReader sr = File.OpenText(_filepath);
-				_Parse(sr.ReadToEnd());
+				_Parse(sr.ReadToEnd(), _filepath);
 				sr.Close();
 			} catch (FileNotFoundException) {
-				Console.WriteLine("File '" + _filepath + "' does not exist! Loading failled!");
+				PushError("File '" + _filepath + "' does not exist!");
 			}
 		}
 		void Parse(string code, bool c)
 		{
-			_Parse(code);
+			_Parse(code, "Internally Parsed Code!");
 		}
 		void Parse(string filename)
 		{
 			try {
 				StreamReader sr = File.OpenText(filename);
-				_Parse(sr.ReadToEnd());
+				_Parse(sr.ReadToEnd(), filename);
 				sr.Close();
 			} catch (FileNotFoundException) {
-				Console.WriteLine("Load '" + filename + "' File not found. Loading failled!");
+				PushError("Could not load '" + _filepath + "' it does not exist!");
 			}
 		}
 		public void ParseCode(string code)
 		{
-			_Parse(code);
+			_Parse(code, "Internally Parsed Code!");
 		}
 		public chunk[] GetChunks()
 		{
@@ -245,6 +252,16 @@ namespace parseManagerCS
 		{
 			_active = false;
 		}
+		public bool GetLogic(parseManager PM, string log)
+		{
+			var test2 = PM.Logic(log);
+			var te = evaluater.Evaluate(PM, test2);
+			if (te > 0) {
+				return true;
+			} else {
+				return false;
+			}
+		}
 		public bool isRegisteredFunction(string method, out chunk o)
 		{
 			if (_chunks.TryGetValue(method, out o)) {
@@ -255,7 +272,7 @@ namespace parseManagerCS
 			}
 			return false;
 		}
-		public object InvokeI(string method, object[] argsV, chunk c,bool rets)
+		public object InvokeI(string method, object[] argsV, chunk c, bool rets)
 		{
 			var ccP = _currentChunk.GetPos();
 			var ccN = _currentChunk.GetName();
@@ -277,7 +294,7 @@ namespace parseManagerCS
 			}
 			_defualtENV = fEnv;
 			def.JUMP(this, method);
-			if(rets){
+			if (rets) {
 				return fEnv; // TODO Handle returns
 			} else {
 				return null;
@@ -293,7 +310,13 @@ namespace parseManagerCS
 				_defineMethod = _defineType.GetMethod(method);
 				return _defineMethod.Invoke(_defineClassObject, tackBArgs(this, args));
 			} catch (Exception e) {
-				PushError("Invalid method: " + method + "\n\n" + e);
+				var tests = e.ToString();
+				if (tests.Contains("Null")) {
+					PushError("Invalid method: " + method + " (Method does not exist! Check your spelling!)");
+				} else if (tests.Contains("ArgumentException")) {
+					PushError("Invalid method: " + method + " (Check your arguments! Ensure the types are correct!)");
+				}
+				PushError("Invalid method: " + method + " (Unknown Error! It just doesn't work!)\n\n" + e);
 				return null;
 			}
 		}
@@ -309,7 +332,13 @@ namespace parseManagerCS
 				_defineMethod.Invoke(_defineClassObject, tackBArgs(this, args));
 				return 0;
 			} catch (Exception e) {
-				PushError("Invalid method: " + method + "\n\n" + e);
+				var tests = e.ToString();
+				if (tests.Contains("Null")) {
+					PushError("Invalid method: " + method + " (Method does not exist! Check your spelling!)");
+				} else if (tests.Contains("ArgumentException")) {
+					PushError("Invalid method: " + method + " (Check your arguments! Ensure the types are correct!)");
+				}
+				PushError("Invalid method: " + method + " (Unknown Error! It just doesn't work!)\n\n" + e);
 				return -1;
 			}
 		}
@@ -330,7 +359,7 @@ namespace parseManagerCS
 				_currentChunk = cchunk;
 				_currentChunk.ResetPos();
 			} else {
-				PushError("Attempt to JUMP to a non existing block!");
+				PushError("Attempt to JUMP to a non existing block: \""+BLOCK+"\"");
 			}
 		}
 		public ENV GetENV()
@@ -368,9 +397,32 @@ namespace parseManagerCS
 		}
 		public void PushError(string err)
 		{
-			Console.WriteLine(err + "\nPress Enter!");
+			if (_currentChunk==null){
+				Console.WriteLine(err+"\nPress Enter");
+				Console.ReadLine();
+				Environment.Exit(0);
+			}
+			var line = _currentChunk.GetCurrentLine();
+			var file = _currentChunk.GetHostFile();
+			var sr = File.OpenText(file);
+			var code = sr.ReadToEnd();
+			var haschunk = false;
+			var chunk = _currentChunk.GetName();
+			code = Regex.Replace(code, @"^\t+", "", RegexOptions.Multiline);
+			var lines = code.Split(new [] { "\r\n", "\n" }, StringSplitOptions.None);
+			var pos = 0;
+			for (int i = 0; i < lines.Length; i++) {
+				if (!haschunk && lines[i].StartsWith("[" + chunk)) {
+					haschunk = true;
+				}
+				if (lines[i].StartsWith(line) && haschunk) {
+					pos = i + 1;
+					break;
+				}
+			}
+			Console.WriteLine(string.Format("Error in File: {0} on Line: {1}\nLIQ: {2}\n\nERROR: {3}\nPress Enter!", file, pos, line, err));
 			Console.ReadLine();
-			def.EXIT(this);
+			Environment.Exit(0);
 		}
 		public nextType Next(string BLOCK)
 		{
@@ -408,57 +460,18 @@ namespace parseManagerCS
 			var type = cCMD.GetCMDType();
 			stuff = cCMD.GetArgs();
 			if (type == "LOGIC") {//{conds,andors,_funcif,_resultif,_funcelse,_resultelse}
-				var conds = (string[])stuff[0];
-				var andors = (string[])stuff[1];
-				var funcif = (string)stuff[2];
-				var argsif = (string[])stuff[3];
-				var funcelse = (string)stuff[4];
-				var argselse = (string[])stuff[5];
-				var objs = new object[conds.Length]; // contain the actual values of what is in the env
-				var truths = new bool[conds.Length / 3];
-				var c = 0;
-				for (int i = 0; i < conds.Length; i += 3) {
-					var condA = (object)ResolveVar(new []{ conds[i] })[0];
-					var e = conds[i + 1];
-					var condB = (object)ResolveVar(new []{ conds[i + 2] })[0];
-					if (e == "==") {
-						truths[c] = condA.ToString() == condB.ToString();
-					} else if (e == ">=") {
-						truths[c] = (double)condA >= (double)condB;
-					} else if (e == "<=") {
-						truths[c] = (double)condA <= (double)condB;
-					} else if (e == "!=" || e == "~=") {
-						truths[c] = condA.ToString() != condB.ToString();
-					} else if (e == ">") {
-						truths[c] = (double)condA > (double)condB;
-					} else if (e == "<") {
-						truths[c] = (double)condA < (double)condB;
-					} else {
-						PushError("Invalid conditional test! " + e + " is not valid!");
-					}
-					c++;
-				}
-				var truth = truths[0];
-				if (truths.Length == 1 && truth) {
+				var conds = (string)stuff[0];
+				var funcif = (string)stuff[1];
+				var argsif = (string[])stuff[2];
+				var funcelse = (string)stuff[3];
+				var argselse = (string[])stuff[4];
+				var truth = GetLogic(this, conds);
+				if (truth) {
 					InvokeNR(funcif, ResolveVar(argsif));
-				} else if (truths.Length == 1) {
-					InvokeNR(funcelse, ResolveVar(argselse));
 				} else {
-					for (int i = 1; i < andors.Length; i++) {
-						if (andors[i - 1] == "a") {
-							truth = truth && truths[i];
-						} else if (andors[i - 1] == "o") {
-							truth = truth || truths[i];
-						} else {
-							PushError("Invalid conditional test! " + andors[i - 1] + " is not valid!");
-						}
-					}
-					if (truth) {
-						InvokeNR(funcif, ResolveVar(argsif));
-					} else {
-						InvokeNR(funcelse, ResolveVar(argselse));
-					}
+					InvokeNR(funcelse, ResolveVar(argselse));
 				}
+
 				tempReturn.SetCMDType("conditional");
 				tempReturn.SetText("test turned out to be: " + truth);
 				return tempReturn;
@@ -508,6 +521,11 @@ namespace parseManagerCS
 				tempReturn.SetCMDType("assignment");
 				tempReturn.SetText(_currentChunk.GetLine());
 				return tempReturn;
+			} else {
+				var b = GetFlag("strictsyntax");
+				if (b){
+					PushError("INVALID SYNTAX!");
+				}
 			}
 			return tempReturn;
 		}
@@ -566,8 +584,16 @@ namespace parseManagerCS
 			bool boo;
 			double ex;
 			for (int i = 0; i < len; i++) {
+				if (v[i] == "true") {
+					args[i] = true;
+					continue;
+				}
+				if (v[i] == "false") {
+					args[i] = false;
+					continue;
+				}
 				if (!v[i].StartsWith("[") && !v[i].StartsWith("\""))
-					ex = evaluater.Evaluate(v[i]);
+					ex = evaluater.Evaluate(this, v[i]);
 				else
 					ex = double.NaN;
 				if (v[i].Length == 0 && len == 1) {
@@ -625,6 +651,54 @@ namespace parseManagerCS
 			}
 			return args;
 		}
+		public int resolveLogic(bool b)
+		{
+			if (b) {
+				return 1;
+			} else {
+				return 0;
+			}
+		}
+		public bool resolveLogic(int b)
+		{
+			if (b == 1) {
+				return true;
+			} else {
+				return true;
+			}
+		}
+		public string Logic(string log)
+		{
+			log = Regex.Replace(log, "and", "*");
+			log = Regex.Replace(log, "or", "+");
+			foreach (Match m in Regex.Matches(log,@"\(?\s*(\S+?)\s*([=!><]+)\s*(\S+)\s*\)?")) {
+				var a = m.Groups[1].Value;
+				var b = m.Groups[2].Value;
+				var c = m.Groups[3].Value;
+				a = Regex.Replace(a, @"\(", "");
+				c = Regex.Replace(c, @"\)", "");
+				if (b == "==") {
+					debug("==");
+					log = Regex.Replace(log, a + "\\s*" + b + "\\s*" + c, resolveLogic(ResolveVar(new []{ a })[0].ToString() == ResolveVar(new []{ c })[0].ToString()).ToString());
+				} else if (b == ">=") {
+					debug(">=");
+					log = Regex.Replace(log, a + "\\s*" + b + "\\s*" + c, resolveLogic(double.Parse(ResolveVar(new []{ a })[0].ToString()) >= double.Parse(ResolveVar(new []{ c })[0].ToString())).ToString());
+				} else if (b == "<=") {
+					debug("<=");
+					log = Regex.Replace(log, a + "\\s*" + b + "\\s*" + c, resolveLogic(double.Parse(ResolveVar(new []{ a })[0].ToString()) <= double.Parse(ResolveVar(new []{ c })[0].ToString())).ToString());
+				} else if (b == ">") {
+					debug(">");
+					log = Regex.Replace(log, a + "\\s*" + b + "\\s*" + c, resolveLogic(double.Parse(ResolveVar(new []{ a })[0].ToString()) > double.Parse(ResolveVar(new []{ c })[0].ToString())).ToString());
+				} else if (b == "<") {
+					debug("<");
+					log = Regex.Replace(log, a + "\\s*" + b + "\\s*" + c, resolveLogic(double.Parse(ResolveVar(new []{ a })[0].ToString()) < double.Parse(ResolveVar(new []{ c })[0].ToString())).ToString());
+				} else if (b == "!=") {
+					debug("!=");
+					log = Regex.Replace(log, a + "\\s*" + b + "\\s*" + c, resolveLogic(ResolveVar(new []{ a })[0].ToString() != ResolveVar(new []{ c })[0].ToString()).ToString());
+				}
+			}
+			return log;
+		}
 		public bool isVar(string val, out object v)
 		{
 			debug("TESTING: " + val);
@@ -673,6 +747,7 @@ namespace parseManagerCS
 		string[] _lines;
 		string[] args;
 		bool isFunc;
+		string _hostfile;
 		Dictionary<string, int> _labels = new Dictionary<string, int>();
 		List<CMD> _compiledlines = new List<CMD>();
 		int _pos = 0;
@@ -697,14 +772,22 @@ namespace parseManagerCS
 			_type = "CODEBLOCK";
 			_clean(cont);
 		}
+		public void SetHostFile(string file)
+		{
+			_hostfile = file;
+		}
+		public string GetHostFile()
+		{
+			return _hostfile;
+		}
 		void _clean(string cont)
 		{
 			var m = Regex.Match(_type, @"([a-zA-Z0-9_]+)");
 			_pureType = m.Groups[1].ToString();
 			var tCont = Regex.Replace(cont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"\t", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"^\-\-.+\r\n", "", RegexOptions.Multiline);
-			tCont = Regex.Replace(tCont, @"^\-\-.+\n", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"^\t+", "", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"\-\-.+\r\n", "\r\n", RegexOptions.Multiline);
+			tCont = Regex.Replace(tCont, @"\-\-.+\n", "\n", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\n\n", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\r\n\r\n", "", RegexOptions.Multiline);
 			tCont = Regex.Replace(tCont, @"\-\-\[\[[\S\s]+\]\]", "", RegexOptions.Multiline);
@@ -719,12 +802,11 @@ namespace parseManagerCS
 				temp = _lines[i];
 				var pureLine = Regex.Match(temp, "^\"(.+)\"");
 				var FuncTest = Regex.Match(temp, @"([a-zA-Z0-9_]+)\s?\((.*)\)");
-				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)=([a-zA-Z\\|&\\^\\+\\-\\*/%0-9_\",\\[\\]]+)");
+				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)\\s*=([a-zA-Z\\s\\|&\\^\\+\\-\\*/%0-9_\",\\[\\]]*)");
 				var FuncWReturn = Regex.Match(temp, "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.*)\\)");
 				var FuncWOReturn = Regex.Match(temp, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
 				var label = Regex.Match(temp, "::(.*)::");
 				var logic = Regex.Match(temp, @"if\s*(.+)\s*then\s*(.+?\))\s*\|\s*(.+?\))");
-				
 				if (logic.ToString() != "") {
 					var condition = logic.Groups[1].ToString();
 					var tempif = logic.Groups[2].ToString();
@@ -764,8 +846,7 @@ namespace parseManagerCS
 					conds[p++] = s1b2;
 					conds[p++] = s1c2;
 					_compiledlines.Add(new CMD("LOGIC", new object[] {
-						conds,
-						andors,
+						condition,
 						_funcif,
 						_resultif,
 						_funcelse,
@@ -858,6 +939,19 @@ namespace parseManagerCS
 			}
 			return temp;
 		}
+		public string GetCurrentLine()
+		{
+			string temp="";
+			if (_pos == 0) {
+				temp = _lines[_pos+2];
+			} else {
+				temp = _lines[_pos - 1];
+			}
+			if (_pos - 1 == _lines.Length) {
+				return null;
+			}
+			return temp;
+		}
 		public CMD GetCLine()
 		{
 			if (_pos < _compiledlines.Count) {
@@ -888,104 +982,34 @@ namespace parseManagerCS
 	}
 	public static class evaluater
 	{
-		static double helper(ENV env, parseManager PM, string o, object _v, object _r)
+		public static double Evaluate(parseManager PM, string str)
 		{
-			double v = 0;
-			double r = 0;
-			if (_v.GetType().ToString() == "System.String") {
-				object temp;
-				if (env.TryGetValue((string)_v, out temp)) {
-					v = (double)temp;
-				} else if (double.TryParse((string)_v, out v)) {
-					// We good!
-				} else {
-					PM.PushError("Attempt to do arithmetic on a null value: " + _v);
+			string oldstr = str;
+			object temp;
+			double temp2;
+			foreach (Match m in Regex.Matches(str, "([a-zA-Z0-9_]+)")) {
+				if (!double.TryParse(m.Groups[0].Value, out temp2)) {
+					temp2 = double.NaN;
 				}
-			} else {
-				v = (double)_v;
-			}
-			if (_r.GetType().ToString() == "System.String") {
-				object temp;
-				if (env.TryGetValue((string)_r, out temp)) {
-					r = (double)temp;
-				} else if (double.TryParse((string)_r, out r)) {
-					// We good!
-				} else {
-					PM.PushError("Attempt to do arithmetic on a null value: " + _r);
-				}
-			} else {
-				v = (double)_v;
-			}
-			// Constructs?
-			if (o == "+") {
-				return r + v;
-			} else if (o == "-") {
-				return r - v;
-			} else if (o == "/") {
-				return r / v;
-			} else if (o == "*") {
-				return r * v;
-			} else if (o == "^") {
-				return Math.Pow(r, v);
-			} else if (o == "%") {
-				return r % v;
-			}
-			return 0;
-		}
-		public static double Evaluate(string cmd)
-		{
-			return Evaluate(cmd, 0);
-		}
-		public static double Evaluate(string cmd, double v)
-		{
-			double test;
-			if (cmd.Length == 0) {
-				return double.NaN;
-			}
-			if (double.TryParse(cmd, out test)) {
-				return test;
-			}
-			var loop = false;
-			if (cmd.Substring(0, 1) == "-") {
-				cmd = "0" + cmd;
-			}
-			var PM = GLOBALS.GetPM();
-			var env = PM.GetENV();
-			var count = 0;
-			var para = Regex.Match(cmd, @"(\(.+\))");
-			if (para.ToString() != "") {
-				return Evaluate(para.Groups[1].Value.Substring(1, para.Groups[1].Value.Length - 2));
-			}
-			foreach (Match m in Regex.Matches(cmd,@"(.*)([/%\+\^\-\*])(.*)")) {
-				loop = true;
-				count++;
-				var l = m.Groups[1].Value;
-				var o = m.Groups[2].Value;
-				var r = m.Groups[3].Value;
-				if (Regex.Match(l, @"([/%\+\^\-\*])").ToString() != "") {
-					v = Evaluate(l, v);
-					v = helper(env, PM, o, r, v);
-				} else if (count == 1) {
-					v = helper(env, PM, o, r, l);
-				}
-			}
-			if (!loop) {
-				object t;
-				if (env != null)
-				if (env.TryGetValue(cmd, out t)) {
-					double te;
-					if (t.GetType().ToString().Contains("Double"))
-						return (double)t;
-					if (t.GetType().ToString().Contains("String"))
-					if (double.TryParse((string)t, out te)) {
-						return te;
+				if (PM.isVar(m.Groups[0].Value, out temp)) {
+					if (temp.GetType().ToString().Contains("Double")) {
+						str = str.Replace(m.Groups[0].Value, ((double)temp).ToString());
+					} else {
+						return double.NaN;
 					}
-					return double.NaN;
+				} else if (!double.IsNaN(temp2)) {
+					str = str.Replace(m.Groups[0].Value, temp2.ToString());
 				} else {
-					t = double.NaN; // It couldn't be done :'(
+					PM.PushError("Variable \""+m.Groups[0].Value+"\" does not exist: ");
 				}
 			}
-			return v; // TODO grab current ENV and does the calculation
+			double result;
+			try {
+				result = Convert.ToDouble(new DataTable().Compute(str, null));
+			} catch {
+				result = double.NaN;
+			}
+			return result;
 		}
 	}
 	[Serializable]
@@ -1142,6 +1166,7 @@ namespace parseManagerCS
 	{
 		static standardDefine _define = new standardDefine();
 		static parseManager _current;
+		static parseManager _main;
 		static readonly ENV _env = new ENV();
 		static List<string> _numvars = new List<string>();
 		static List<parseManager> _Threads = new List<parseManager>();
@@ -1188,9 +1213,16 @@ namespace parseManagerCS
 		{
 			_current = o;
 		}
+		public static void SetMainPM(parseManager o)
+		{
+			_main = o;
+		}
 		public static parseManager GetPM()
 		{
 			return _current;
+		}
+		public static parseManager GetMainPM(){
+			return _main;
 		}
 		public static bool GetFlag(string flag)
 		{
@@ -1301,10 +1333,29 @@ public class standardDefine
 			next = PM.Next();
 		}
 	}
+	public void _newThread(parseManager PM, string filename)
+	{
+		var thread = new Thread(() => _THREAD(PM,filename));
+		thread.Start();
+	}
+	public void _THREAD(parseManager _PM, string filename)
+	{
+		parseManager PM = new parseManager(filename);
+		GLOBALS.AddThread(PM);
+		PM.makeThread();
+		PM._SetDENV(_PM.GetDENV());
+		PM.SetENV(_PM.GetENV());
+		nextType next = PM.Next();
+		string type;
+		while (next.GetCMDType() != "EOF") {
+			type = next.GetCMDType();
+			next = PM.Next();
+		}
+	}
 	public void SAVE(parseManager PM)
 	{
-		if(PM.isAThread()){
-			PM.PushError("Cannot Call SAVE() in a thread!");
+		if (PM.isAThread()) {
+			GLOBALS.GetMainPM().PushError("Cannot Call SAVE() in a thread!");
 		}
 		var env = PM.GetDENV();
 		var c = PM.GetCurrentChunk();
@@ -1315,8 +1366,8 @@ public class standardDefine
 	}
 	public bool LOAD(parseManager PM)
 	{
-		if(PM.isAThread()){
-			PM.PushError("Cannot Call LOAD() in a thread!");
+		if (PM.isAThread()) {
+			GLOBALS.GetMainPM().PushError("Cannot Call LOAD() in a thread!");
 		}
 		try {
 			ENV env = GLOBALS.ReadFromBinaryFile("savedata.dat");
@@ -1412,7 +1463,7 @@ public class standardDefine
 				}
 			}
 		}
-		PM.PushError("Unable to GOTO a non existing label: " + label + "!");
+		PM.PushError("Unable to GOTO a non existing label: \"" + label + "\"");
 		return 0;
 	}
 	public double len(parseManager PM, object o)
@@ -1478,7 +1529,7 @@ public class standardDefine
 	}
 	public double CALC(parseManager PM, string ex)
 	{
-		return evaluater.Evaluate(ex);
+		return evaluater.Evaluate(PM, ex);
 	}
 	public void pause(parseManager PM)
 	{
@@ -1579,8 +1630,17 @@ public class standardDefine
 			Console.Write(s);
 		} catch (ArgumentOutOfRangeException e) {
 			Console.Clear();
-			Console.WriteLine(e.Message);
+			PM.PushError(e.Message);
 		}
+	}
+	public void setWindowSize(parseManager PM, double x,double y){
+		Console.SetWindowSize((int)x,(int)y);
+	}
+	public double getConsoleWidth(parseManager PM){
+		return Console.WindowWidth;
+	}
+	public double getConsoleHeight(parseManager PM){
+		return Console.WindowHeight;
 	}
 	public bool isDown(parseManager PM, string key)
 	{
@@ -1679,6 +1739,10 @@ public class standardDefine
 			kk = Key.Space;
 		}
 		return Keyboard.IsKeyDown(kk);
+	}
+	public void error(parseManager PM, string msg)
+	{
+		PM.PushError(msg);
 	}
 	public string isPressing(parseManager PM)
 	{

@@ -7,10 +7,10 @@
  * To change this template use Tools | Options | Coding | Edit Standard Headers.
  */
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
+using System.IO;
 using parseManagerCS;
-using System.Windows.Input;
 namespace parseManagerCS
 {
 	class Program
@@ -18,12 +18,47 @@ namespace parseManagerCS
 		[STAThread]
 		public static void Main(string[] args)
 		{
-			if (args.Length == 0) {
-				Console.Write("Please Include a file path!");
-				Console.ReadLine();
-				Environment.Exit(0);
+			args=new string[]{"choiceTest.txt"};
+			string file;
+			string print = "";
+			List<char> temp = new List<char>();
+			parseManager PM;
+			var cpath = Process.GetCurrentProcess().MainModule.FileName;
+			int counter = 0;
+			if (args.Length == 0) { // if we don't have args, let's check for an appended script!
+				using (FileStream fs = new FileStream(cpath, FileMode.Open, FileAccess.Read)) {
+					long offset;
+					int nextByte;
+					for (offset = 1; offset <= fs.Length; offset++) {
+						fs.Seek(-offset, SeekOrigin.End);
+						nextByte = fs.ReadByte();
+						if (nextByte == 0) {
+							break;
+						}
+						counter++;
+					}
+					if (counter == 0 && args.Length == 0) {
+						Console.WriteLine("No appended code and no file path given!\nPress Emter!");
+						Console.ReadLine();
+						Environment.Exit(0);
+					} else {
+						fs.Close();
+						using (var reader = new StreamReader(cpath))
+						{
+							reader.BaseStream.Seek(-counter, SeekOrigin.End);
+							string line;
+							while ((line = reader.ReadLine()) != null) {
+								print+=line+"\n";
+							}
+						}
+					}
+				}
+				PM = new parseManager(print, true);
+			} else { // we have args so lets load it!
+				file = args[0];
+				PM = new parseManager(file);
 			}
-			parseManager PM = new parseManager(args[0]);
+			GLOBALS.SetMainPM(PM);
 			nextType next = PM.Next();
 			string type;
 			while (next.GetCMDType() != "EOF") {
@@ -37,3 +72,14 @@ namespace parseManagerCS
 		}
 	}
 }
+/*
+ - New Block structure! 
+
+NOTE: If you have an error within the catch block you will not be a happy coder!
+```lua
+-- This Blcok will catch any errors that take place! This may cause an un recoverable error however!
+[BLOCKNAME:event("catch",err)]{
+	
+}
+``` 
+ */

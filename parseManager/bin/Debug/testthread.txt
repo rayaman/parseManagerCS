@@ -1,0 +1,10 @@
+ENTRY SCREEN_FIX
+[SCREEN_FIX]{
+	::checker::
+		x=getConsoleWidth()
+		y=getConsoleHeight()
+		sleep(1000)
+		if x==100 and y==50 then GOTO("checker")|SKIP(0)
+		setWindowSize(100,50)
+		GOTO("checker")
+}

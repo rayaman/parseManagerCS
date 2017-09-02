@@ -7,6 +7,7 @@ TODO:
 - [x] Improve audio support (Simple)
 - [x] Add simple threading (Alright)
 - [ ] Fix Bugs! (Death)
+- [ ] multiple returns for functions
 
 Maybe:
 - [ ] Add While/for loops (With labels this can easily be done. So it isn't really needed, I may add it in the future though!)
@@ -31,7 +32,6 @@ DISABLE forseelabels
 ENABLE debugging
 -- When enabled a lot of mess will show up on your console... This isn't really useful to you as much as it is for me... If you ever have a weird error enable debugging and post everything into an issue so I can look at what causes an error
 -- This language is still a major WIP!
-
 -- Create a block named START
 [START]{
 	"This is a pause statement"
@@ -114,5 +114,77 @@ We also have a bunch of other built in functions to make coding eaiser!
 - void=writeAt(string msg,x,y) -- writes at a certain position
 - bool=isDown(key) -- returns true if a key is pressed See Keys
 
-TODO: Finish the readme...
+Here is a RPS(rock paper scissors) Example!
+```lua
+VERSION 1.2 -- This will not work on older versions!
+ENTRY RPS -- Set entry point to RPS
+[RPS]{
+	write("Name: ")
+	name=getInput()
+	clear() -- clear the console
+	if name=="" then SKIP(-4)|SKIP(0) -- This stuff makes empty inputs invalid! If nothing was entered prompt again!
+	"Lets play! Press Enter when your ready" -- a pause statement... Well kinda atleast on CONSOLE mode...
+	list=["r","p","s"] -- create a list
+	list2=["rock","paper","scissors"] -- creats another list
+	list3=[] -- create an empty table
+	list3["r"]="rock" -- set the index of the table
+	list3["p"]="paper"
+	list3["s"]="scissors"
+	::gameloop::
+		cpus_mov=random(0,3)
+		cpus_move=list[cpus_mov]
+		write("Enter 'r' 'p' or 's': ")
+		player_move=getInput()
+		print("You played: $player_move$ the CPU played: $cpus_move$")
+		if player_move!="r" and player_move!="p" and player_move!="s" then GOTO("gameloop")|SKIP(0)
+		a=list2[cpus_mov]
+		b=list3[player_move]
+		if player_move==cpus_move then JUMP("TIE")|SKIP(0)
+		if cpus_move=="r" and player_move=="s" then JUMP("CPUWIN")|SKIP(0)
+		if cpus_move=="p" and player_move=="r" then JUMP("CPUWIN")|SKIP(0)
+		if cpus_move=="s" and player_move=="p" then JUMP("CPUWIN")|SKIP(0)
+		b=list2[cpus_mov]
+		a=list3[player_move]
+		if player_move=="r" and cpus_move=="s" then JUMP("PlayerWIN")|SKIP(0)
+		if player_move=="p" and cpus_move=="r" then JUMP("PlayerWIN")|SKIP(0)
+		if player_move=="s" and cpus_move=="p" then JUMP("PlayerWIN")|SKIP(0)
+		::choice::
+			write("That was a fun game! Do you want to play again? (y/n): ")
+			cho=getInput()
+			if cho=="y" then GOTO("gameloop")|SKIP(0)
+			if cho=="n" then JUMP("GOODBYE")|GOTO("choice")
+}
+[CPUWIN]{ -- I am using these blocks like hybrid functions... instead of going back to their called location they go back to a location that I define
+	"I won $name$, you lose! You know $a$ beats $b$"
+	GOTO("choice")
+}
+[PlayerWIN]{
+	"$name$ you won wow! I guess my $b$ was no match for your $a$"
+	GOTO("choice")
+}
+[TIE]{
+	"No one won..."
+	GOTO("choice")
+}
+[GOODBYE]{
+	"Thanks for playing!"
+	QUIT()
+}
+```
+
+Version 1.1 - 1.2 Were all about bug fixes
+- Logic if `condition then func1()|func2()` has been fixed!
+- Parentheses in both logic and math expressions now adhere to the order of opperations and(*) before or(+)
+- Fixed minor bugs with tables!
+
+Version 1.3 addressed error handling
+- Error handling now displays the file that contains the error, the line number, the actual line's text and the error message!
+- new method: error(msg) Throws an error
+- new header: THREAD filename -- runs a file in a seperate thread. This helps when you are dealing with lots of threads!
+
+TODO: Version 1.4
+- Fix error handling in a thread... While errors are handles correctly on the main thread multithreaded errors seem to not be handled correctly!
+-
+Idea:
+new block made to catch thread errors and stop thread related errors from exiting the app
 

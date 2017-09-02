@@ -1,0 +1,53 @@
+ENTRY RPS
+[RPS]{
+	write("Name: ")
+	name=getInput()
+	clear()
+	if name=="" then SKIP(-4)|SKIP(0) -- This stuff makes empty inputs invalid!
+	"Lets play! Press Enter when your ready"
+	list=["r","p","s"]
+	list2=["rock","paper","scissors"]
+	list3=[]
+	list3["r"]="rock"
+	list3["p"]="paper"
+	list3["s"]="scissors"
+	::gameloop::
+		cpus_mov=random(0,3)
+		cpus_move=list[cpus_mov]
+		write("Enter 'r' 'p' or 's': ")
+		player_move=getInput()
+		print("You played: $player_move$ the CPU played: $cpus_move$")
+		if player_move!="r" and player_move!="p" and player_move!="s" then GOTO("gameloop")|SKIP(0)
+		a=list2[cpus_mov]
+		b=list3[player_move]
+		if player_move==cpus_move then JUMP("TIE")|SKIP(0)
+		if cpus_move=="r" and player_move=="s" then JUMP("CPUWIN")|SKIP(0)
+		if cpus_move=="p" and player_move=="r" then JUMP("CPUWIN")|SKIP(0)
+		if cpus_move=="s" and player_move=="p" then JUMP("CPUWIN")|SKIP(0)
+		b=list2[cpus_mov]
+		a=list3[player_move]
+		if player_move=="r" and cpus_move=="s" then JUMP("PlayerWIN")|SKIP(0)
+		if player_move=="p" and cpus_move=="r" then JUMP("PlayerWIN")|SKIP(0)
+		if player_move=="s" and cpus_move=="p" then JUMP("PlayerWIN")|SKIP(0)
+		::choice::
+			write("That was a fun game! Do you want to play again? (y/n): ")
+			cho=getInput()
+			if cho=="y" then GOTO("gameloop")|SKIP(0)
+			if cho=="n" then JUMP("GOODBYE")|GOTO("choice")
+}
+[CPUWIN]{
+	"I won $name$, you lose! You know $a$ beats $b$"
+	GOTO("choice")
+}
+[PlayerWIN]{
+	"$name$ you won wow! I guess my $b$ was no match for your $a$"
+	GOTO("choice")
+}
+[TIE]{
+	"No one won..."
+	GOTO("choice")
+}
+[GOODBYE]{
+	"Thanks for playing!"
+	QUIT()
+}

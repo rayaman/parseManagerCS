@@ -1,19 +1,24 @@
-VERSION 1.0
-LOAD game/play.dat
+VERSION 1.2
+THREAD testthread.txt
+[PLAYGAME]{
+	print("Welcome to my game!")
+	PAUSE("ENJOY!")
+	QUIT()
+}
 [COUNTER]{
-	::loop::
+	::cloop::
 		sleep(1000)
 		secs_played=secs_played+1
 		if secs_played==60 then GOTO("secs")|SKIP(0)
-		if mins_played==60 then GOTO("mins")|GOTO("loop")
+		if mins_played==60 then GOTO("mins")|GOTO("cloop")
 		::secs::
 			secs_played=0
 			mins_played=mins_played+1
-			GOTO("loop")
+			GOTO("cloop")
 		::mins::
 			mins_played=0
 			hours_played=hours_played+1
-			GOTO("loop")
+			GOTO("cloop")
 }
 [START]{
 	secs_played=0
@@ -29,7 +34,7 @@ LOAD game/play.dat
 	name=getInput()
 	clear()
 	if name=="" then SKIP(-4)|SKIP(0)
-	PAUSE("So your name is $name$, thats cool!")
+	"So your name is $name$, thats cool!"
 	pos=1
 	sleep(200)
 	SAVE()
@@ -41,9 +46,9 @@ LOAD game/play.dat
 		keyUP=isDown("{UP}")
 		keyDOWN=isDown("{DOWN}")
 		keyENTER=isDown("{ENTER}")
-		if keyUP==true then setVarPlay("pos",pos-1)|SKIP(0) -- tests
-		if keyDOWN==true then setVarPlay("pos",pos+1)|SKIP(0) -- more tests
-		if keyENTER==true then GOTO("choicemade")|SKIP(0) -- hehehe
+		if keyUP==true then setVarPlay("pos",pos-1)|SKIP(0)
+		if keyDOWN==true then setVarPlay("pos",pos+1)|SKIP(0)
+		if keyENTER==true then GOTO("choicemade")|SKIP(0)
 		writeAt("->",1,pos+2)
 		sleep(50)
 		GOTO("loop")
@@ -55,6 +60,7 @@ LOAD game/play.dat
 		if pos==3 then print("You Pressed Credits")|SKIP(0)
 		if pos==4 then QUIT()|SKIP(0)
 		PAUSE("Tests done (Press Enter!)")
+		QUIT()
 }
 [PAUSE:function(msg)]{
 	write(msg)
