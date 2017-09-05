@@ -561,13 +561,32 @@ namespace parseManagerCS
 		}
 		public string parseHeader(string header)
 		{
-			var results = Regex.Matches(header, @"(\$.*?\$)");
+			var results = Regex.Matches(header, @"\$([\S\*]+?)\$");
 			int len = results.Count;
 			string str;
 			object temp;
+			object temp2;
+			int testnum;
 			for (int i = 0; i < len; i++) {
-				str = results[i].ToString();
-				if (isVar(str.Substring(1, str.Length - 2), out temp)) {
+				str = results[i].Groups[1].Value;
+				if (str.Contains("*")) {
+					var test = Regex.Match(str, @"(.+?)\*(.+)");
+					var spart = test.Groups[1].Value;
+					var ipart = test.Groups[2].Value;
+					if(!isVar(spart, out temp)){
+						
+					}
+					if (int.TryParse(ipart, out testnum)) {
+						str = def.repeat(this, temp.ToString(), (double)testnum);
+						header = header.Replace(results[i].ToString(), str);
+					} else if (isVar(ipart, out temp2)) {
+						str = def.repeat(this, temp.ToString(), (double)temp2);
+						header = header.Replace(results[i].ToString(), str);
+					} else {
+						PushError("When using the $varname*num$ expression num must be a number or a variable that is set to a number!");
+					}
+				}
+				if (isVar(str, out temp)) {
 					header = header.Replace(results[i].ToString(), temp.ToString());
 				} else {
 					header = header.Replace(results[i].ToString(), "null");
@@ -876,7 +895,6 @@ namespace parseManagerCS
 					_compiledlines.Add(new CMD("LINE", new object[]{ pureLine.ToString() }));
 				} else if (assignment.ToString() != "") {
 					var vars = GLOBALS.Split(assignment.Groups[1].ToString());
-					Console.WriteLine(assignment.Groups[2]);
 					var tabTest = assignment.Groups[2].ToString();
 					string[] vals = GLOBALS.Split(tabTest);
 					//string[] vals = Regex.Split(assignment.Groups[2].ToString(), ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
@@ -1423,7 +1441,8 @@ public class standardDefine
 		temp.SetParent(PM.GetENV());
 		return temp;
 	}
-	public string repeat(parseManager PM,string str, double n){
+	public string repeat(parseManager PM, string str, double n)
+	{
 		return string.Concat(Enumerable.Repeat(str, (int)n));
 	}
 	public string getInput(parseManager PM)

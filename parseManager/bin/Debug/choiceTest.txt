@@ -29,7 +29,9 @@ THREAD testthread.txt
 	snd_select=loadSong("Audio/select.mp3")
 	playSong(bgm_song)
 	setFancyForm("left")
-	LOAD()	
+	str="!"
+	"Lets do this$str*3$"
+	LOAD()
 	write("Name: ")
 	name=getInput()
 	clear()
