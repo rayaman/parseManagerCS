@@ -6,3 +6,5 @@ C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Debu
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.pdb
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\NAudio.dll
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\NAudio.xml
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\OpenTK.dll
+C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\OpenTK.xml

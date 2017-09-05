@@ -8,6 +8,7 @@ using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Reflection;
@@ -18,12 +19,12 @@ using NAudio.Wave;
 using parseManagerCS;
 namespace parseManagerCS
 {
-	/// The parseManager is an Advance Config Script
+	/// The parseManager is an Advance Config Script (It goes beyond what it was initially desgined for though!)
 	/// It allows the user to run code while also defining variables
 	/// This also has very flexible flow control meaning you can use it for chat logic and such
 	public class parseManager
 	{
-		public string _VERSION = "1.3.0";
+		public string _VERSION = "1.3.1";
 		standardDefine _invoke = new standardDefine();
 		string _filepath;
 		bool _active = true;
@@ -143,7 +144,7 @@ namespace parseManagerCS
 			_flags.Add("debugging", false);
 			_flags.Add("topdown", true);
 			_flags.Add("casesensitive", true);
-			_flags.Add("strictsyntax",false);
+			_flags.Add("strictsyntax", false);
 		}
 		public ENV Pop()
 		{
@@ -179,7 +180,7 @@ namespace parseManagerCS
 			}
 			foreach (Match m in Regex.Matches(data, @"VERSION ([a-zA-Z0-9_\./]+)")) {
 				if (Version.Parse(m.Groups[1].ToString()) > Version.Parse(_VERSION)) {
-					PushError("Attempt to run a code created for a greater version of the interperter/compiler! Script's Version: "+Version.Parse(m.Groups[1].ToString())+" Interperter's Version: "+Version.Parse(_VERSION));
+					PushError("Attempt to run a code created for a greater version of the interperter/compiler! Script's Version: " + Version.Parse(m.Groups[1].ToString()) + " Interperter's Version: " + Version.Parse(_VERSION));
 				}
 			}
 			foreach (Match m in Regex.Matches(data, @"THREAD ([a-zA-Z0-9_\./]+)")) {
@@ -359,7 +360,7 @@ namespace parseManagerCS
 				_currentChunk = cchunk;
 				_currentChunk.ResetPos();
 			} else {
-				PushError("Attempt to JUMP to a non existing block: \""+BLOCK+"\"");
+				PushError("Attempt to JUMP to a non existing block: \"" + BLOCK + "\"");
 			}
 		}
 		public ENV GetENV()
@@ -397,8 +398,8 @@ namespace parseManagerCS
 		}
 		public void PushError(string err)
 		{
-			if (_currentChunk==null){
-				Console.WriteLine(err+"\nPress Enter");
+			if (_currentChunk == null) {
+				Console.WriteLine(err + "\nPress Enter");
 				Console.ReadLine();
 				Environment.Exit(0);
 			}
@@ -523,7 +524,7 @@ namespace parseManagerCS
 				return tempReturn;
 			} else {
 				var b = GetFlag("strictsyntax");
-				if (b){
+				if (b) {
 					PushError("INVALID SYNTAX!");
 				}
 			}
@@ -802,7 +803,7 @@ namespace parseManagerCS
 				temp = _lines[i];
 				var pureLine = Regex.Match(temp, "^\"(.+)\"");
 				var FuncTest = Regex.Match(temp, @"([a-zA-Z0-9_]+)\s?\((.*)\)");
-				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)\\s*=([a-zA-Z\\s\\|&\\^\\+\\-\\*/%0-9_\",\\[\\]]*)");
+				var assignment = Regex.Match(temp, "^([a-zA-Z0-9_,\\[\\]\"]+)\\s*=\\s*(.+)");
 				var FuncWReturn = Regex.Match(temp, "([\\[\\]\"a-zA-Z0-9_,]+)\\s?=\\s?([a-zA-Z0-9_]+)\\s?\\((.*)\\)");
 				var FuncWOReturn = Regex.Match(temp, @"^([a-zA-Z0-9_]+)\s?\((.*)\)");
 				var label = Regex.Match(temp, "::(.*)::");
@@ -875,9 +876,10 @@ namespace parseManagerCS
 					_compiledlines.Add(new CMD("LINE", new object[]{ pureLine.ToString() }));
 				} else if (assignment.ToString() != "") {
 					var vars = GLOBALS.Split(assignment.Groups[1].ToString());
+					Console.WriteLine(assignment.Groups[2]);
 					var tabTest = assignment.Groups[2].ToString();
 					string[] vals = GLOBALS.Split(tabTest);
-					//vals = Regex.Split(assignment.Groups[2].ToString(), ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
+					//string[] vals = Regex.Split(assignment.Groups[2].ToString(), ",(?=(?:[^\"'\\[\\]]*[\"'\\[\\]][^\"'\\[\\]]*[\"'\\[\\]])*[^\"'\\[\\]]*$)");
 					_compiledlines.Add(new CMD("ASSIGN", new object[]{ vars, vals }));
 				} else {
 					_compiledlines.Add(new CMD("UNKNOWN", new object[]{ }));
@@ -941,9 +943,9 @@ namespace parseManagerCS
 		}
 		public string GetCurrentLine()
 		{
-			string temp="";
+			string temp = "";
 			if (_pos == 0) {
-				temp = _lines[_pos+2];
+				temp = _lines[_pos + 2];
 			} else {
 				temp = _lines[_pos - 1];
 			}
@@ -1000,7 +1002,7 @@ namespace parseManagerCS
 				} else if (!double.IsNaN(temp2)) {
 					str = str.Replace(m.Groups[0].Value, temp2.ToString());
 				} else {
-					PM.PushError("Variable \""+m.Groups[0].Value+"\" does not exist: ");
+					return double.NaN;//PM.PushError("Variable \"" + m.Groups[0].Value + "\" does not exist");
 				}
 			}
 			double result;
@@ -1221,7 +1223,8 @@ namespace parseManagerCS
 		{
 			return _current;
 		}
-		public static parseManager GetMainPM(){
+		public static parseManager GetMainPM()
+		{
 			return _main;
 		}
 		public static bool GetFlag(string flag)
@@ -1335,7 +1338,7 @@ public class standardDefine
 	}
 	public void _newThread(parseManager PM, string filename)
 	{
-		var thread = new Thread(() => _THREAD(PM,filename));
+		var thread = new Thread(() => _THREAD(PM, filename));
 		thread.Start();
 	}
 	public void _THREAD(parseManager _PM, string filename)
@@ -1419,6 +1422,9 @@ public class standardDefine
 		var temp = new ENV();
 		temp.SetParent(PM.GetENV());
 		return temp;
+	}
+	public string repeat(parseManager PM,string str, double n){
+		return string.Concat(Enumerable.Repeat(str, (int)n));
 	}
 	public string getInput(parseManager PM)
 	{
@@ -1633,13 +1639,16 @@ public class standardDefine
 			PM.PushError(e.Message);
 		}
 	}
-	public void setWindowSize(parseManager PM, double x,double y){
-		Console.SetWindowSize((int)x,(int)y);
+	public void setWindowSize(parseManager PM, double x, double y)
+	{
+		Console.SetWindowSize((int)x, (int)y);
 	}
-	public double getConsoleWidth(parseManager PM){
+	public double getConsoleWidth(parseManager PM)
+	{
 		return Console.WindowWidth;
 	}
-	public double getConsoleHeight(parseManager PM){
+	public double getConsoleHeight(parseManager PM)
+	{
 		return Console.WindowHeight;
 	}
 	public bool isDown(parseManager PM, string key)

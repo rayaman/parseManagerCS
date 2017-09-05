@@ -38,6 +38,9 @@
     <Reference Include="NAudio">
       <HintPath>..\packages\NAudio.1.8.2\lib\net35\NAudio.dll</HintPath>
     </Reference>
+    <Reference Include="OpenTK">
+      <HintPath>..\packages\OpenTK.1.1.2349.61993\lib\NET40\OpenTK.dll</HintPath>
+    </Reference>
     <Reference Include="PresentationCore">
       <RequiredTargetFramework>3.0</RequiredTargetFramework>
     </Reference>
