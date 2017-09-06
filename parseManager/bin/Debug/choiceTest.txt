@@ -1,4 +1,4 @@
-VERSION 1.2
+VERSION 1.3.2
 THREAD testthread.txt
 [PLAYGAME]{
 	print("Welcome to my game!")
@@ -29,9 +29,7 @@ THREAD testthread.txt
 	snd_select=loadSong("Audio/select.mp3")
 	playSong(bgm_song)
 	setFancyForm("left")
-	str="!"
-	"Lets do this$str*3$"
-	LOAD()
+	LOAD("savedata.dat")
 	write("Name: ")
 	name=getInput()
 	clear()
@@ -39,10 +37,10 @@ THREAD testthread.txt
 	"So your name is $name$, thats cool!"
 	pos=1
 	sleep(200)
-	SAVE()
+	SAVE("savedata.dat")
 	::loop::
 		clear()
-		SAVE()
+		SAVE("savedata.dat")
 		setFG(Color_Blue)
 		fancy("  What to do $name$? Time plsyed $hours_played$:$mins_played$:$secs_played$,/l,  Play Game,  View Stats,  View Credits,  Quit Game")
 		keyUP=isDown("{UP}")
@@ -52,7 +50,7 @@ THREAD testthread.txt
 		if keyDOWN==true then setVarPlay("pos",pos+1)|SKIP(0)
 		if keyENTER==true then GOTO("choicemade")|SKIP(0)
 		writeAt("->",1,pos+2)
-		sleep(50)
+		sleep(75)
 		GOTO("loop")
 	::choicemade::
 		playSong(snd_select)
@@ -70,6 +68,9 @@ THREAD testthread.txt
 		keyENTER=isDown("{ENTER}")
 		if keyENTER==true then SKIP(0)|GOTO("loop")
 	print(" ")
+}
+[testFunc:function(a)]{
+	"Invoke Test: $a$!"
 }
 [setVarPlay:function(var,val)]{
 	setVar(var,val)

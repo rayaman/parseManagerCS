@@ -24,10 +24,11 @@ namespace parseManagerCS
 	/// This also has very flexible flow control meaning you can use it for chat logic and such
 	public class parseManager
 	{
-		public string _VERSION = "1.3.1";
+		public string _VERSION = "1.4.0";
 		standardDefine _invoke = new standardDefine();
 		string _filepath;
 		bool _active = true;
+		int _pauseRate = 100;
 		string _define = "NO_DEFINE";
 		string _entry = "START";
 		bool _isInternal;
@@ -39,6 +40,7 @@ namespace parseManagerCS
 		chunk _currentChunk;
 		chunk _lastChunk = null;
 		ENV _mainENV = new ENV();
+		bool _paused;
 		public ENV _defualtENV;
 		Stack<ENV> _fStack = new Stack<ENV>();
 		Dictionary<string, bool> _flags = new Dictionary<string, bool>();
@@ -46,7 +48,7 @@ namespace parseManagerCS
 		Dictionary<string, string> _methods = new Dictionary<string, string>();
 		void INITENV()
 		{
-			GLOBALS.SetPM(this);
+			_mainENV.SetSen(GetFlag("casesensitive"));
 			_mainENV["Color_Black"] = ConsoleColor.Black;
 			_mainENV["Color_Blue"] = ConsoleColor.Blue;
 			_mainENV["Color_Cyan"] = ConsoleColor.Cyan;
@@ -68,6 +70,14 @@ namespace parseManagerCS
 		public void _SetDENV(ENV env)
 		{
 			_mainENV = env;
+		}
+		public void Pause()
+		{
+			_paused = true;
+		}
+		public void Resume()
+		{
+			_paused = false;
 		}
 		public void makeThread()
 		{
@@ -163,7 +173,10 @@ namespace parseManagerCS
 			if (_flags["debugging"])
 				Console.WriteLine("DEBUGGING: " + msg);
 		}
-		
+		public void SetPauseRate(int r)
+		{
+			_pauseRate = r;
+		}
 		void _Parse(string data, string hFile)
 		{
 			foreach (Match m in Regex.Matches(data, @"LOAD ([a-zA-Z0-9_\./]+)")) {
@@ -279,6 +292,7 @@ namespace parseManagerCS
 			var ccN = _currentChunk.GetName();
 			var argsN = c.GetArgs();
 			var fEnv = new ENV();
+			fEnv.SetSen(GetFlag("casesensitive"));
 			fEnv.SetParent(_defualtENV);
 			if (!(argsN.Length == 1 && argsN[0] == "")) {
 				for (int i = 0; i < argsN.Length; i++) {
@@ -300,6 +314,15 @@ namespace parseManagerCS
 			} else {
 				return null;
 			}
+		}
+		public object Invoke(string method, object[] args)
+		{
+			chunk c;
+			if (isRegisteredFunction(method, out c)) {
+				return InvokeI(method, args, c, true);
+			}
+			PushError("Attempt to invoke a non existing method!");
+			return null;
 		}
 		public object InvokeR(string method, object[] args)
 		{
@@ -434,8 +457,13 @@ namespace parseManagerCS
 		}
 		public nextType Next()
 		{
-			GLOBALS.SetPM(this);
 			var tempReturn = new nextType();
+			if (_paused) {
+				if (_pauseRate != 0) {
+					Thread.Sleep(_pauseRate);
+				}
+				return tempReturn;
+			}
 			if (_currentChunk == null) {
 				SetBlock();
 			}
@@ -573,7 +601,7 @@ namespace parseManagerCS
 					var test = Regex.Match(str, @"(.+?)\*(.+)");
 					var spart = test.Groups[1].Value;
 					var ipart = test.Groups[2].Value;
-					if(!isVar(spart, out temp)){
+					if (!isVar(spart, out temp)) {
 						
 					}
 					if (int.TryParse(ipart, out testnum)) {
@@ -1035,7 +1063,10 @@ namespace parseManagerCS
 	[Serializable]
 	public class ENV
 	{
+		bool _sen;
 		ENV _Parent;
+		bool _busyI;
+		bool _busyS;
 		Dictionary<string, object> _vars = new Dictionary<string, object>();
 		Dictionary<int, object> _varsI = new Dictionary<int, object>();
 		public void SetParent(ENV other)
@@ -1076,6 +1107,10 @@ namespace parseManagerCS
 			obj = null;
 			return false;
 		}
+		public void SetSen(bool s)
+		{
+			_sen = s;
+		}
 		public bool TryGetValue(int ind, out object obj)
 		{
 			if (this[ind] != null) {
@@ -1088,7 +1123,7 @@ namespace parseManagerCS
 		public object this[string ind] {
 			get {
 				object obj;
-				if (!GLOBALS.GetFlag("casesensitive")) {
+				if (!_sen) {
 					ind = ind.ToLower();
 				}
 				if (_vars.TryGetValue(ind, out obj)) {
@@ -1100,10 +1135,15 @@ namespace parseManagerCS
 				return null;
 			}
 			set {
-				if (!GLOBALS.GetFlag("casesensitive")) {
+				while(_busyS){
+					// wait
+				}
+				_busyS=true;
+				if (!_sen) {
 					ind = ind.ToLower();
 				}
 				_vars[ind] = value;
+				_busyS=false;
 			}
 		}
 		public object this[int ind] {
@@ -1118,7 +1158,12 @@ namespace parseManagerCS
 				return null;
 			}
 			set {
+				while(_busyI){
+					// wait
+				}
+				_busyI=true;
 				_varsI[ind] = value;
+				_busyI=false;
 			}
 		}
 	}
@@ -1185,11 +1230,14 @@ namespace parseManagerCS
 	static class GLOBALS
 	{
 		static standardDefine _define = new standardDefine();
-		static parseManager _current;
 		static parseManager _main;
 		static readonly ENV _env = new ENV();
 		static List<string> _numvars = new List<string>();
 		static List<parseManager> _Threads = new List<parseManager>();
+		public static parseManager[] GetThreads()
+		{
+			return _Threads.ToArray();
+		}
 		public static void AddThread(parseManager PM)
 		{
 			_Threads.Add(PM);
@@ -1229,26 +1277,13 @@ namespace parseManagerCS
 		{
 			_env[ind] = data;
 		}
-		public static void SetPM(parseManager o)
-		{
-			_current = o;
-		}
 		public static void SetMainPM(parseManager o)
 		{
 			_main = o;
 		}
-		public static parseManager GetPM()
-		{
-			return _current;
-		}
 		public static parseManager GetMainPM()
 		{
 			return _main;
-		}
-		public static bool GetFlag(string flag)
-		{
-			var PM = GetPM();
-			return PM.GetFlag(flag);
 		}
 		public static void Add_Var(string var)
 		{
@@ -1373,7 +1408,7 @@ public class standardDefine
 			next = PM.Next();
 		}
 	}
-	public void SAVE(parseManager PM)
+	public void SAVE(parseManager PM, string name)
 	{
 		if (PM.isAThread()) {
 			GLOBALS.GetMainPM().PushError("Cannot Call SAVE() in a thread!");
@@ -1383,15 +1418,15 @@ public class standardDefine
 		env["__CurrentChunkName"] = c.GetName();
 		env["__CurrentChunkPos"] = c.GetPos();
 		env["__DefualtENV"] = PM.GetENV();
-		GLOBALS.WriteToBinaryFile("savedata.dat", env);
+		GLOBALS.WriteToBinaryFile(name, env);
 	}
-	public bool LOAD(parseManager PM)
+	public bool LOAD(parseManager PM, string _name)
 	{
 		if (PM.isAThread()) {
 			GLOBALS.GetMainPM().PushError("Cannot Call LOAD() in a thread!");
 		}
 		try {
-			ENV env = GLOBALS.ReadFromBinaryFile("savedata.dat");
+			ENV env = GLOBALS.ReadFromBinaryFile(_name);
 			var name = (string)env["__CurrentChunkName"];
 			var pos = (int)env["__CurrentChunkPos"];
 			var denv = (ENV)env["__DefualtENV"];
@@ -1558,7 +1593,15 @@ public class standardDefine
 	}
 	public void pause(parseManager PM)
 	{
-		Console.ReadLine();
+		if (!PM.isAThread()) {
+			PM.Pause();
+		} else {
+			PM.debug("WARNING: Calling pause with the main thread is not allowed!");
+		}
+	}
+	public void resume(parseManager PM)
+	{
+		PM.Resume();
 	}
 	public void print(parseManager PM, object o)
 	{
@@ -1571,6 +1614,9 @@ public class standardDefine
 	public double rand(parseManager PM)
 	{
 		return rnd.NextDouble();
+	}
+	public void randomseed(parseManager PM,double seed){
+		rnd = new Random((int)seed);
 	}
 	public double round(parseManager PM, double num, double n)
 	{

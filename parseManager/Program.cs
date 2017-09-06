@@ -72,14 +72,3 @@ namespace parseManagerCS
 		}
 	}
 }
-/*
- - New Block structure! 
-
-NOTE: If you have an error within the catch block you will not be a happy coder!
-```lua
--- This Blcok will catch any errors that take place! This may cause an un recoverable error however!
-[BLOCKNAME:event("catch",err)]{
-	
-}
-``` 
- */
