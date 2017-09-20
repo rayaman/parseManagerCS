@@ -24,7 +24,7 @@ namespace parseManagerCS
 	/// This also has very flexible flow control meaning you can use it for chat logic and such
 	public class parseManager
 	{
-		public string _VERSION = "1.4.0";
+		public string _VERSION = "1.4.2";
 		standardDefine _invoke = new standardDefine();
 		string _filepath;
 		bool _active = true;
@@ -32,6 +32,7 @@ namespace parseManagerCS
 		string _define = "NO_DEFINE";
 		string _entry = "START";
 		bool _isInternal;
+		parseManager systemThread;
 		Type _defineType;
 		bool isThread;
 		standardDefine def = new standardDefine();
@@ -66,6 +67,12 @@ namespace parseManagerCS
 			_mainENV["Color_White"] = ConsoleColor.White;
 			_mainENV["Color_Yellow"] = ConsoleColor.Yellow;
 			_mainENV["VERSION"] = _VERSION;
+			Parse(
+				@"[SYSTEM_THREADED_BLOCK]{
+::loop::
+sleep(1)
+GOTO(""loop"")
+}", true);
 		}
 		public void _SetDENV(ENV env)
 		{
@@ -134,6 +141,11 @@ namespace parseManagerCS
 			_defualtENV = _mainENV;
 			INITENV();
 			Parse(code, c);
+		}
+		public void InitSystemThread()
+		{
+			var thread = new Thread(() => def._THREAD("SYSTEM_THREADED_BLOCK", this, systemThread));
+			thread.Start();
 		}
 		public bool IsInternal()
 		{
@@ -319,10 +331,14 @@ namespace parseManagerCS
 		{
 			chunk c;
 			if (isRegisteredFunction(method, out c)) {
-				return InvokeI(method, args, c, true);
-			}
-			PushError("Attempt to invoke a non existing method!");
+				return systemThread.InvokeI(method, args, c, true);
+			} 
+			try {
+				return systemThread.InvokeR(method, args);
+			} catch {
+				PushError("Attempt to invoke a non existing method!");
 			return null;
+			}
 		}
 		public object InvokeR(string method, object[] args)
 		{
@@ -338,7 +354,9 @@ namespace parseManagerCS
 				if (tests.Contains("Null")) {
 					PushError("Invalid method: " + method + " (Method does not exist! Check your spelling!)");
 				} else if (tests.Contains("ArgumentException")) {
-					PushError("Invalid method: " + method + " (Check your arguments! Ensure the types are correct!)");
+					PushError("Invalid method: " + method + " (Check your number of arguments!)");
+				} else if (tests.Contains("mismatch")) {
+					PushError("Invalid method: " + method + " (Ensure the types are correct!)");
 				}
 				PushError("Invalid method: " + method + " (Unknown Error! It just doesn't work!)\n\n" + e);
 				return null;
@@ -589,6 +607,7 @@ namespace parseManagerCS
 		}
 		public string parseHeader(string header)
 		{
+			header = header.Replace(@"\$", "````");
 			var results = Regex.Matches(header, @"\$([\S\*]+?)\$");
 			int len = results.Count;
 			string str;
@@ -597,10 +616,13 @@ namespace parseManagerCS
 			int testnum;
 			for (int i = 0; i < len; i++) {
 				str = results[i].Groups[1].Value;
-				if (str.Contains("*")) {
+				if (str.Contains("*") || str.Contains(":")) {
 					var test = Regex.Match(str, @"(.+?)\*(.+)");
+					var test2 = Regex.Match(str, @"(.+):(.+)");
 					var spart = test.Groups[1].Value;
 					var ipart = test.Groups[2].Value;
+					var vpart = test2.Groups[1].Value;
+					var fpart = test2.Groups[2].Value;
 					if (!isVar(spart, out temp)) {
 						
 					}
@@ -610,8 +632,11 @@ namespace parseManagerCS
 					} else if (isVar(ipart, out temp2)) {
 						str = def.repeat(this, temp.ToString(), (double)temp2);
 						header = header.Replace(results[i].ToString(), str);
+					} else if (isVar(vpart, out temp2) && fpart != "") {
+						str = def.tostring(this, (double)temp2, fpart);
+						header = header.Replace(results[i].ToString(), str);
 					} else {
-						PushError("When using the $varname*num$ expression num must be a number or a variable that is set to a number!");
+						PushError("When using the $varname*num$ expression num must be a number or a variable that is set to a number! (" + header + ")");
 					}
 				}
 				if (isVar(str, out temp)) {
@@ -620,6 +645,7 @@ namespace parseManagerCS
 					header = header.Replace(results[i].ToString(), "null");
 				}
 			}
+			header = header.Replace("````", "$");
 			return header;
 		}
 		public object[] ResolveVar(string[] v)
@@ -1073,7 +1099,7 @@ namespace parseManagerCS
 		{
 			_Parent = other;
 		}
-		public object[] GetList()
+		public object[] ToArray()
 		{
 			var temp = new object[_varsI.Count];
 			var count = 0;
@@ -1135,15 +1161,15 @@ namespace parseManagerCS
 				return null;
 			}
 			set {
-				while(_busyS){
+				while (_busyS) {
 					// wait
 				}
-				_busyS=true;
+				_busyS = true;
 				if (!_sen) {
 					ind = ind.ToLower();
 				}
 				_vars[ind] = value;
-				_busyS=false;
+				_busyS = false;
 			}
 		}
 		public object this[int ind] {
@@ -1158,12 +1184,12 @@ namespace parseManagerCS
 				return null;
 			}
 			set {
-				while(_busyI){
+				while (_busyI) {
 					// wait
 				}
-				_busyI=true;
+				_busyI = true;
 				_varsI[ind] = value;
-				_busyI=false;
+				_busyI = false;
 			}
 		}
 	}
@@ -1279,6 +1305,7 @@ namespace parseManagerCS
 		}
 		public static void SetMainPM(parseManager o)
 		{
+			o.InitSystemThread();
 			_main = o;
 		}
 		public static parseManager GetMainPM()
@@ -1389,6 +1416,34 @@ public class standardDefine
 			next = PM.Next();
 		}
 	}
+	public void _THREAD(string block, parseManager _PM, parseManager PM)
+	{
+		var define = _PM.GetDefine();
+		var path = _PM.GetFilepath();
+		if (_PM.IsInternal()) {
+			if (define == "NO_DEFINE") {
+				PM = new parseManager(path, true);
+			} else {
+				PM = new parseManager(path, define, true);
+			}
+		} else {
+			if (define == "NO_DEFINE") {
+				PM = new parseManager(path);
+			} else {
+				PM = new parseManager(path, define);
+			}
+		}
+		GLOBALS.AddThread(PM);
+		PM.makeThread();
+		PM._SetDENV(_PM.GetDENV());
+		PM.SetENV(_PM.GetENV());
+		nextType next = PM.Next(block);
+		string type;
+		while (next.GetCMDType() != "EOF") {
+			type = next.GetCMDType();
+			next = PM.Next();
+		}
+	}
 	public void _newThread(parseManager PM, string filename)
 	{
 		var thread = new Thread(() => _THREAD(PM, filename));
@@ -1447,6 +1502,10 @@ public class standardDefine
 		var c = PM.GetCurrentChunk();
 		c.SetPos((int)env[1]);
 		setENV(PM, (ENV)env[3]);
+	}
+	public string tostring(parseManager PM, double obj, string pad)
+	{
+		return obj.ToString(pad);
 	}
 	public void EXIT(parseManager PM)
 	{
@@ -1533,7 +1592,7 @@ public class standardDefine
 			return (double)((string)o).Length;
 		}
 		if (type.Contains("ENV")) {
-			return (double)((ENV)o).GetList().Length;
+			return (double)((ENV)o).ToArray().Length;
 		}
 		return 0;
 	}
@@ -1615,7 +1674,8 @@ public class standardDefine
 	{
 		return rnd.NextDouble();
 	}
-	public void randomseed(parseManager PM,double seed){
+	public void randomseed(parseManager PM, double seed)
+	{
 		rnd = new Random((int)seed);
 	}
 	public double round(parseManager PM, double num, double n)
@@ -1775,20 +1835,6 @@ public class standardDefine
 			kk = Key.Y;
 		} else if (k == "Z") {
 			kk = Key.Z;
-		} else if (k == "{UP}") {
-			kk = Key.Up;
-		} else if (k == "{DOWN}") {
-			kk = Key.Down;
-		} else if (k == "{LEFT}") {
-			kk = Key.Left;
-		} else if (k == "{RIGHT}") {
-			kk = Key.Right;
-		} else if (k == "{ENTER}") {
-			kk = Key.Enter;
-		} else if (k == "{LSHIFT}") {
-			kk = Key.LeftShift;
-		} else if (k == "{RSHIFT}") {
-			kk = Key.RightShift;
 		} else if (k == "0") {
 			kk = Key.D0;
 		} else if (k == "1") {
@@ -1809,10 +1855,52 @@ public class standardDefine
 			kk = Key.D8;
 		} else if (k == "9") {
 			kk = Key.D9;
+		} else if (k == "{UP}") {
+			kk = Key.Up;
+		} else if (k == "{DOWN}") {
+			kk = Key.Down;
+		} else if (k == "{LEFT}") {
+			kk = Key.Left;
+		} else if (k == "{RIGHT}") {
+			kk = Key.Right;
+		} else if (k == "{ENTER}") {
+			kk = Key.Enter;
+		} else if (k == "{LSHIFT}") {
+			kk = Key.LeftShift;
+		} else if (k == "{RSHIFT}") {
+			kk = Key.RightShift;
 		} else if (k == "{SPACE}") {
 			kk = Key.Space;
+		} else if (k == "{F1}") {
+			kk = Key.F1;
+		} else if (k == "{F2}") {
+			kk = Key.F2;
+		} else if (k == "{F3}") {
+			kk = Key.F3;
+		} else if (k == "{F4}") {
+			kk = Key.F4;
+		} else if (k == "{F5}") {
+			kk = Key.F5;
+		} else if (k == "{F6}") {
+			kk = Key.F6;
+		} else if (k == "{F7}") {
+			kk = Key.F7;
+		} else if (k == "{F8}") {
+			kk = Key.F8;
+		} else if (k == "{F9}") {
+			kk = Key.F9;
+		} else if (k == "{F10}") {
+			kk = Key.F10;
+		} else if (k == "{F11}") {
+			kk = Key.F11;
+		} else if (k == "{F12}") {
+			kk = Key.F12;
 		}
 		return Keyboard.IsKeyDown(kk);
+	}
+	public void setCursorVisibility(parseManager PM, bool v)
+	{
+		Console.CursorVisible = v;
 	}
 	public void error(parseManager PM, string msg)
 	{

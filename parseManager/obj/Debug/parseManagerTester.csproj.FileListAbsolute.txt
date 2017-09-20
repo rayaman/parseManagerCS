@@ -8,3 +8,13 @@ C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debu
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\NAudio.xml
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\OpenTK.dll
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Debug\OpenTK.xml
+D:\SharpDevelop Projects\parseManager\parseManager\bin\Debug\parseManagerTester.exe.config
+D:\SharpDevelop Projects\parseManager\parseManager\bin\Debug\parseManagerTester.exe
+D:\SharpDevelop Projects\parseManager\parseManager\bin\Debug\parseManagerTester.pdb
+D:\SharpDevelop Projects\parseManager\parseManager\bin\Debug\NAudio.dll
+D:\SharpDevelop Projects\parseManager\parseManager\bin\Debug\OpenTK.dll
+D:\SharpDevelop Projects\parseManager\parseManager\bin\Debug\NAudio.xml
+D:\SharpDevelop Projects\parseManager\parseManager\bin\Debug\OpenTK.xml
+D:\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.csprojResolveAssemblyReference.cache
+D:\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.exe
+D:\SharpDevelop Projects\parseManager\parseManager\obj\Debug\parseManagerTester.pdb

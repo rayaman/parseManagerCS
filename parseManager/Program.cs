@@ -18,7 +18,7 @@ namespace parseManagerCS
 		[STAThread]
 		public static void Main(string[] args)
 		{
-			//args=new string[]{"choiceTest.txt"};
+			args=new string[]{"choiceTest.txt"};
 			string file;
 			string print = "";
 			List<char> temp = new List<char>();
