@@ -4,3 +4,11 @@ C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Rele
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\obj\Release\parseManagerTester.exe
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Release\NAudio.dll
 C:\Users\Ryan\Documents\SharpDevelop Projects\parseManager\parseManager\bin\Release\NAudio.xml
+C:\Users\Ryan\Documents\GitHub\parseManagerCS\parseManager\bin\Release\parseManagerTester.exe.config
+C:\Users\Ryan\Documents\GitHub\parseManagerCS\parseManager\bin\Release\parseManagerTester.exe
+C:\Users\Ryan\Documents\GitHub\parseManagerCS\parseManager\bin\Release\NAudio.dll
+C:\Users\Ryan\Documents\GitHub\parseManagerCS\parseManager\bin\Release\OpenTK.dll
+C:\Users\Ryan\Documents\GitHub\parseManagerCS\parseManager\bin\Release\NAudio.xml
+C:\Users\Ryan\Documents\GitHub\parseManagerCS\parseManager\bin\Release\OpenTK.xml
+C:\Users\Ryan\Documents\GitHub\parseManagerCS\parseManager\obj\Release\parseManagerTester.csproj.CoreCompileInputs.cache
+C:\Users\Ryan\Documents\GitHub\parseManagerCS\parseManager\obj\Release\parseManagerTester.exe

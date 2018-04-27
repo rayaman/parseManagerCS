@@ -24,7 +24,7 @@ LOAD game/play.dat
 	snd_select=loadSong("Audio/select.mp3")
 	playSong(bgm_song)
 	setFancyForm("left")
-	LOAD()	
+	LOAD("savedata.dat")	
 	write("Name: ")
 	name=getInput()
 	clear()
@@ -32,10 +32,10 @@ LOAD game/play.dat
 	PAUSE("So your name is $name$, thats cool!")
 	pos=1
 	sleep(200)
-	SAVE()
+	SAVE("savedata.dat")
 	::loop::
 		clear()
-		SAVE()
+		SAVE("savedata.dat")
 		setFG(Color_Blue)
 		fancy("  What to do $name$? Time plsyed $hours_played$:$mins_played$:$secs_played$,/l,  Play Game,  View Stats,  View Credits,  Quit Game")
 		keyUP=isDown("{UP}")
@@ -45,7 +45,7 @@ LOAD game/play.dat
 		if keyDOWN==true then setVarPlay("pos",pos+1)|SKIP(0) -- more tests
 		if keyENTER==true then GOTO("choicemade")|SKIP(0) -- hehehe
 		writeAt("->",1,pos+2)
-		sleep(50)
+		sleep(100)
 		GOTO("loop")
 	::choicemade::
 		playSong(snd_select)
