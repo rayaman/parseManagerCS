@@ -1,13 +1,15 @@
 ParseManagerCS Version!
 TODO:
 - [ ] Allow the use of functions in arguments (Tough)
-- [ ] Allow the use of statements in conditionals: `if num+5>=GETAGE()-1 then STOP(song)|SKIP(0)` (Tough)
+- [ ] Allow the use of methods in conditionals: `if num+5>=GETAGE()-1 then STOP(song)|SKIP(0)'
 - [ ] Add other cool built in things (Fun)
 - [ ] Add object support (Tough)
 - [x] Improve audio support (Simple)
 - [x] Add simple threading (Alright)
 - [ ] Fix Bugs! (Death)
 - [ ] multiple returns for functions
+
+The lua version has many of these features and more implemented already. Updates to this version are soon to come
 
 Maybe:
 - [ ] Add While/for loops (With labels this can easily be done. So it isn't really needed, I may add it in the future though!)
@@ -183,7 +185,7 @@ Version 1.3 addressed error handling
 - new header: THREAD filename -- runs a file in a seperate thread. This helps when you are dealing with lots of threads!
 
 TODO: Version 1.4
-- Fix error handling in a thread... While errors are handles correctly on the main thread multithreaded errors seem to not be handled correctly!
+- Fix error handling in a thread... While errors are handled correctly on the main thread multithreaded errors seem to not be handled correctly!
 -
 Idea:
 new block made to catch thread errors and stop thread related errors from exiting the app
